@@ -121,6 +121,8 @@ class FraudEvaluation:
     risk_level: RiskLevel
     reasons: List[str]
     timestamp: datetime
+    amount: Optional[Decimal] = None
+    location: Optional[Location] = None
     status: str = ""  # Se calcula en __post_init__
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[datetime] = None
@@ -139,11 +141,14 @@ class FraudEvaluation:
             raise ValueError("User ID cannot be empty")
 
         # Determinar estado inicial basado en nivel de riesgo
+        # Nueva lógica: LOW_RISK = APPROVED, MEDIUM_RISK = PENDING_REVIEW, HIGH_RISK = REJECTED
         if not self.status:  # Solo si no fue establecido manualmente
             if self.risk_level == RiskLevel.LOW_RISK:
                 self.status = "APPROVED"
-            else:
+            elif self.risk_level == RiskLevel.MEDIUM_RISK:
                 self.status = "PENDING_REVIEW"
+            else:  # HIGH_RISK
+                self.status = "REJECTED"
 
     def apply_manual_decision(self, decision: str, analyst_id: str) -> None:
         """

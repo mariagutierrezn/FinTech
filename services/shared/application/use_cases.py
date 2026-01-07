@@ -87,28 +87,36 @@ class EvaluateTransactionUseCase:
 
         # 3. Ejecutar todas las estrategias y combinar resultados
         all_reasons = []
-        max_risk_level = RiskLevel.LOW_RISK
+        rules_violated = 0  # Contador de reglas incumplidas
 
         for strategy in self.strategies:
             result = strategy.evaluate(transaction, historical_location)
             
-            # Acumular razones
-            all_reasons.extend(result["reasons"])
-            
-            # Nota del desarrollador:
-            # La IA sugirió usar un if/elif largo. Lo refactoricé usando
-            # la comparación de enums para determinar el máximo nivel de riesgo,
-            # cumpliendo con "Don't Repeat Yourself" (DRY).
-            if result["risk_level"].value > max_risk_level.value:
-                max_risk_level = result["risk_level"]
+            # Si la estrategia detectó violaciones, contar como regla incumplida
+            if result["reasons"]:
+                rules_violated += 1
+                all_reasons.extend(result["reasons"])
+        
+        # Nueva lógica de estados basada en reglas incumplidas:
+        # - 0 reglas incumplidas = APPROVED (LOW_RISK)
+        # - 1 regla incumplida = PENDING_REVIEW (MEDIUM_RISK)
+        # - 2+ reglas incumplidas = REJECTED (HIGH_RISK)
+        if rules_violated == 0:
+            risk_level = RiskLevel.LOW_RISK
+        elif rules_violated == 1:
+            risk_level = RiskLevel.MEDIUM_RISK
+        else:  # 2 o más reglas incumplidas
+            risk_level = RiskLevel.HIGH_RISK
 
         # 4. Crear evaluación con el resultado final
         evaluation = FraudEvaluation(
             transaction_id=transaction.id,
             user_id=transaction.user_id,
-            risk_level=max_risk_level,
+            risk_level=risk_level,
             reasons=all_reasons,
             timestamp=datetime.now(),
+            amount=transaction.amount,
+            location=transaction.location,
         )
 
         # 5. Persistir evaluación
@@ -122,11 +130,11 @@ class EvaluateTransactionUseCase:
         )
 
         # 7. Si es HIGH_RISK o MEDIUM_RISK, enviar a revisión manual (HU-010)
-        if max_risk_level in (RiskLevel.HIGH_RISK, RiskLevel.MEDIUM_RISK):
+        if risk_level in (RiskLevel.HIGH_RISK, RiskLevel.MEDIUM_RISK):
             await self.publisher.publish_for_manual_review(
                 {
                     "transaction_id": transaction.id,
-                    "risk_level": max_risk_level.name,
+                    "risk_level": risk_level.name,
                     "reasons": all_reasons,
                     "amount": float(transaction.amount),
                     "user_id": transaction.user_id,
@@ -136,7 +144,7 @@ class EvaluateTransactionUseCase:
         # 8. Retornar resultado
         return {
             "transaction_id": transaction.id,
-            "risk_level": max_risk_level.name,
+            "risk_level": risk_level.name,
             "reasons": all_reasons,
             "status": evaluation.status,
         }

@@ -56,15 +56,19 @@ docker-compose logs -f
 # 5. Acceder a la API
 # http://localhost:8000/docs (Swagger UI)
 
-# 6. Acceder al frontend (en otra terminal)
-# Instalar Poetry si no lo tienes
-pip install poetry
+# 6. Acceder a los frontends
+# Frontend Usuario: http://localhost:5173
+# Frontend Admin: http://localhost:3001
 
-# Instalar dependencias
-poetry install
+# Iniciar frontend de usuario
+cd frontend/user-app
+npm install
+npm run dev
 
-# Ejecutar Streamlit
-poetry run streamlit run demo/streamlit_app.py
+# Iniciar frontend admin (en otra terminal)
+cd frontend/admin-dashboard
+npm install
+npm run dev
 ```
 
 ### Opción 2: Desarrollo Local
@@ -88,8 +92,9 @@ poetry run uvicorn src.infrastructure.api.main:app --reload
 # 6. Ejecutar Worker (en otra terminal)
 poetry run python -m src.infrastructure.worker
 
-# 7. Ejecutar frontend (en otra terminal)
-poetry run streamlit run demo/streamlit_app.py
+# 7. Ejecutar frontends
+# Ver instrucciones en frontend/user-app/README.md
+# Ver instrucciones en frontend/admin-dashboard/README.md
 ```
 
 ## 🧪 Testing

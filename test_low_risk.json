@@ -1,0 +1,9 @@
+{
+    "id": "TEST-LOW-RISK-001",
+    "user_id": "user_456",
+    "amount": 500.0,
+    "location": {
+        "latitude": 40.7128,
+        "longitude": -74.0060
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "id": "TEST-001",
+    "user_id": "user_123",
+    "amount": 2500.0,
+    "location": {
+        "latitude": 40.7128,
+        "longitude": -74.0060
+    }
+}

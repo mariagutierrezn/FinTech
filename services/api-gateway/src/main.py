@@ -91,7 +91,7 @@ def get_review_use_case(repository=Depends(get_repository)):
 
 
 # Registrar rutas con dependency injection
-from src.routes import router, configure_dependencies
+from src.routes import router, api_v1_router, configure_dependencies
 
 configure_dependencies(
     repository_factory=get_repository,
@@ -102,6 +102,7 @@ configure_dependencies(
 )
 
 app.include_router(router)
+app.include_router(api_v1_router)  # Añadir router v1
 
 
 @app.get("/health")

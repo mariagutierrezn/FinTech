@@ -75,6 +75,11 @@ class MongoDBAdapter(TransactionRepository):
             "status": evaluation.status,
             "reviewed_by": evaluation.reviewed_by,
             "reviewed_at": evaluation.reviewed_at,
+            "amount": float(evaluation.amount) if evaluation.amount else None,
+            "location": {
+                "latitude": evaluation.location.latitude,
+                "longitude": evaluation.location.longitude
+            } if evaluation.location else None
         }
         self.evaluations.insert_one(document)
 
@@ -143,12 +148,24 @@ class MongoDBAdapter(TransactionRepository):
         La IA olvidó manejar el enum RiskLevel. Agregué conversión explícita
         para evitar errores de tipos.
         """
+        from decimal import Decimal
+        
+        location = None
+        if document.get("location"):
+            from shared.domain.models import Location
+            location = Location(
+                latitude=document["location"]["latitude"],
+                longitude=document["location"]["longitude"]
+            )
+        
         return FraudEvaluation(
             transaction_id=document["transaction_id"],
             user_id=document.get("user_id", "unknown"),
             risk_level=RiskLevel[document["risk_level"]],  # Usar RiskLevel[name] en lugar de RiskLevel(value)
             reasons=document["reasons"],
             timestamp=document["timestamp"],
+            amount=Decimal(str(document["amount"])) if document.get("amount") else None,
+            location=location,
             status=document.get("status", "PENDING_REVIEW"),
             reviewed_by=document.get("reviewed_by"),
             reviewed_at=document.get("reviewed_at"),

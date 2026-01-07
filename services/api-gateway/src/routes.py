@@ -8,10 +8,11 @@ Nota del desarrollador (María Gutiérrez):
 La IA sugirió poner toda la lógica en las rutas. La moví a los casos de uso
 para cumplir con Separation of Concerns - las rutas solo manejan HTTP.
 """
-from fastapi import APIRouter, HTTPException, Header, status
-from typing import List, Optional, Callable, Any
+from fastapi import APIRouter, HTTPException, Header, Query, status
+from typing import List, Optional, Callable, Any, Dict
 from pydantic import BaseModel, Field
 from decimal import Decimal
+from datetime import datetime
 
 
 # DTOs para request/response
@@ -39,8 +40,32 @@ class ThresholdConfigRequest(BaseModel):
     location_radius_km: float = Field(..., gt=0)
 
 
+class TransactionValidateRequest(BaseModel):
+    """DTO para validación sincrónica de transacción (Frontend Usuario)"""
+
+    amount: float = Field(..., gt=0, description="Transaction amount")
+    userId: str = Field(..., description="User ID")
+    location: str = Field(..., description="Location string")
+    deviceId: str = Field(..., description="Device ID")
+
+
+class RuleParametersRequest(BaseModel):
+    """DTO para actualización de parámetros de regla"""
+
+    parameters: Dict[str, Any] = Field(..., description="Rule parameters")
+
+
+class RuleReorderRequest(BaseModel):
+    """DTO para reordenar reglas en Chain of Responsibility"""
+
+    ruleIds: List[str] = Field(..., description="Ordered list of rule IDs")
+
+
 # Router principal
 router = APIRouter()
+
+# Sub-routers para organización
+api_v1_router = APIRouter(prefix="/api/v1")
 
 # Variables globales para las factories de dependencias
 _repository_factory = None
@@ -179,7 +204,7 @@ async def get_user_transactions(user_id: str):
     ]
 
 
-@router.put("/transaction/review/{transaction_id}")
+@api_v1_router.put("/transaction/review/{transaction_id}")
 async def review_transaction(
     transaction_id: str,
     review: ReviewRequest,
@@ -247,3 +272,349 @@ async def update_thresholds(
         "updated_by": analyst_id,
         "config": config.model_dump(),
     }
+
+
+# ============================================================================
+# Endpoints API v1 para Frontends
+# ============================================================================
+
+@api_v1_router.post("/transaction/validate")
+async def validate_transaction_sync(transaction: TransactionValidateRequest):
+    """
+    Validación sincrónica de transacción para Frontend Usuario
+    
+    Endpoint específico para el simulador de transacciones.
+    Retorna resultado inmediato con status, riskScore y violations.
+    """
+    try:
+        # Instanciar dependencias
+        repository = _repository_factory()
+        cache = _cache_factory()
+        publisher = _publisher_factory()
+        
+        # Crear estrategias
+        from shared.config import settings
+        from shared.domain.strategies.amount_threshold import AmountThresholdStrategy
+        from shared.domain.strategies.location_check import LocationStrategy
+        
+        strategies = [
+            AmountThresholdStrategy(Decimal(str(settings.amount_threshold))),
+            LocationStrategy(settings.location_radius_km),
+        ]
+        
+        # Crear e invocar use case
+        from shared.application.use_cases import EvaluateTransactionUseCase
+        import uuid
+        
+        evaluate_use_case = EvaluateTransactionUseCase(repository, publisher, cache, strategies)
+        
+        # Convertir location string a coordenadas (formato esperado: "Ciudad, País" con coordenadas mock)
+        # Para simplificar, usar coordenadas de ciudades comunes
+        location_coords = {
+            "New York": {"latitude": 40.7128, "longitude": -74.0060},
+            "Los Angeles": {"latitude": 34.0522, "longitude": -118.2437},
+            "Chicago": {"latitude": 41.8781, "longitude": -87.6298},
+            "Miami": {"latitude": 25.7617, "longitude": -80.1918},
+            "San Francisco": {"latitude": 37.7749, "longitude": -122.4194}
+        }
+        
+        location_parts = transaction.location.split(", ")
+        city = location_parts[0] if len(location_parts) > 0 else "Unknown"
+        coords = location_coords.get(city, {"latitude": 40.7128, "longitude": -74.0060})
+        
+        location_dict = {
+            "latitude": coords["latitude"],
+            "longitude": coords["longitude"]
+        }
+        
+        # Preparar payload
+        transaction_data = {
+            "id": str(uuid.uuid4()),
+            "amount": transaction.amount,
+            "user_id": transaction.userId,
+            "location": location_dict,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        result = await evaluate_use_case.execute(transaction_data)
+        
+        # Mapear risk_level a status
+        risk_level = result["risk_level"]
+        if risk_level == "LOW_RISK":
+            status_value = "APPROVED"
+            risk_score = 15
+        elif risk_level == "MEDIUM_RISK":
+            status_value = "SUSPICIOUS"
+            risk_score = 62
+        else:  # HIGH_RISK
+            status_value = "REJECTED"
+            risk_score = 95
+        
+        # Extraer violations
+        violations = result.get("reasons", [])
+        
+        return {
+            "status": status_value,
+            "riskScore": risk_score,
+            "violations": violations
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@api_v1_router.get("/admin/rules")
+async def get_rules():
+    """
+    Lista todas las reglas activas
+    
+    Retorna información completa de cada regla incluyendo
+    ID, nombre, tipo, parámetros, estado y orden de prioridad.
+    """
+    try:
+        cache = _cache_factory()
+        
+        # Obtener configuración actual de umbrales
+        config = await cache.get_threshold_config()
+        
+        from shared.config import settings
+        amount_threshold = config.get("amount_threshold", settings.amount_threshold) if config else settings.amount_threshold
+        location_radius = config.get("location_radius_km", settings.location_radius_km) if config else settings.location_radius_km
+        
+        # Definir reglas (en producción, cargar desde BD)
+        rules = [
+            {
+                "id": "rule_amount_threshold",
+                "name": "RuleMontoAlto",
+                "type": "amount_threshold",
+                "parameters": {
+                    "threshold": amount_threshold
+                },
+                "enabled": True,
+                "order": 1
+            },
+            {
+                "id": "rule_location_check",
+                "name": "RuleUbicacionInusual",
+                "type": "location_check",
+                "parameters": {
+                    "radius_km": location_radius
+                },
+                "enabled": True,
+                "order": 2
+            }
+        ]
+        
+        return rules
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching rules: {str(e)}")
+
+
+@api_v1_router.put("/admin/rules/{rule_id}")
+async def update_rule(
+    rule_id: str,
+    rule_params: RuleParametersRequest,
+    analyst_id: str = Header(..., alias="X-Analyst-ID")
+):
+    """
+    Actualiza parámetros de una regla específica
+    
+    Permite modificar los parámetros de configuración de una regla
+    sin necesidad de redesplegar el sistema.
+    """
+    try:
+        cache = _cache_factory()
+        
+        # Actualizar según el tipo de regla
+        if rule_id == "rule_amount_threshold":
+            threshold = rule_params.parameters.get("threshold")
+            if threshold is None or threshold <= 0:
+                raise ValueError("Threshold must be positive")
+            
+            # Obtener config actual
+            config = await cache.get_threshold_config()
+            if config is None:
+                from shared.config import settings
+                config = {
+                    "amount_threshold": settings.amount_threshold,
+                    "location_radius_km": settings.location_radius_km
+                }
+            
+            # Actualizar threshold
+            config["amount_threshold"] = threshold
+            await cache.set_threshold_config(**config)
+            
+        elif rule_id == "rule_location_check":
+            radius_km = rule_params.parameters.get("radius_km")
+            if radius_km is None or radius_km <= 0:
+                raise ValueError("Radius must be positive")
+            
+            # Obtener config actual
+            config = await cache.get_threshold_config()
+            if config is None:
+                from shared.config import settings
+                config = {
+                    "amount_threshold": settings.amount_threshold,
+                    "location_radius_km": settings.location_radius_km
+                }
+            
+            # Actualizar radius
+            config["location_radius_km"] = radius_km
+            await cache.set_threshold_config(**config)
+        else:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        
+        return {
+            "success": True,
+            "rule": {
+                "id": rule_id,
+                "parameters": rule_params.parameters,
+                "updated_by": analyst_id
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating rule: {str(e)}")
+
+
+@api_v1_router.get("/admin/transactions/log")
+async def get_transactions_log(
+    status: Optional[str] = Query(None, description="Filter by status: APPROVED, SUSPICIOUS, REJECTED"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of transactions to return"),
+    user_id: Optional[str] = Query(None, description="Filter by user ID")
+):
+    """
+    Log completo de transacciones con filtros
+    
+    Permite filtrar por estado, usuario y limitar cantidad de resultados.
+    Utilizado por el Dashboard Admin para monitoreo.
+    """
+    try:
+        repository = _repository_factory()
+        
+        # Obtener todas las evaluaciones
+        evaluations = await repository.get_all_evaluations()
+        
+        # Filtrar por user_id si se especifica
+        if user_id:
+            evaluations = [e for e in evaluations if e.user_id == user_id]
+        
+        # Filtrar por status si se especifica
+        if status:
+            # Mapear status del frontend a status del backend
+            status_map = {
+                "APPROVED": "APPROVED",
+                "SUSPICIOUS": "PENDING_REVIEW",
+                "REJECTED": "REJECTED"
+            }
+            backend_status = status_map.get(status.upper(), status.upper())
+            evaluations = [e for e in evaluations if e.status == backend_status]
+        
+        # Limitar resultados
+        evaluations = evaluations[:limit]
+        
+        # Formatear respuesta con datos de la evaluación
+        result = []
+        for e in evaluations:
+            # Mapear status del backend al frontend
+            frontend_status = "APPROVED" if e.status == "APPROVED" else ("SUSPICIOUS" if e.status == "PENDING_REVIEW" else "REJECTED")
+            
+            result.append({
+                "id": e.transaction_id,
+                "amount": float(e.amount) if e.amount else 0.0,
+                "userId": e.user_id,
+                "date": e.timestamp.isoformat(),
+                "status": frontend_status,
+                "violations": e.reasons,
+                "riskLevel": e.risk_level.name,
+                "location": f"{e.location.latitude}, {e.location.longitude}" if e.location else "N/A"
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching transaction log: {str(e)}")
+
+
+@api_v1_router.get("/admin/metrics")
+async def get_metrics():
+    """
+    KPIs del sistema para Dashboard Admin
+    
+    Retorna métricas clave: total de transacciones, tasas de bloqueo,
+    transacciones en revisión y risk score promedio.
+    """
+    try:
+        repository = _repository_factory()
+        
+        # Obtener todas las evaluaciones
+        evaluations = await repository.get_all_evaluations()
+        
+        if not evaluations:
+            return {
+                "totalTransactions": 0,
+                "blockedRate": 0.0,
+                "suspiciousRate": 0.0,
+                "avgRiskScore": 0
+            }
+        
+        total = len(evaluations)
+        blocked = sum(1 for e in evaluations if e.status == "REJECTED")
+        suspicious = sum(1 for e in evaluations if e.status == "SUSPICIOUS")
+        
+        # Calcular risk score promedio (simplificado)
+        risk_scores = []
+        for e in evaluations:
+            if e.risk_level.name == "LOW_RISK":
+                risk_scores.append(15)
+            elif e.risk_level.name == "MEDIUM_RISK":
+                risk_scores.append(62)
+            else:  # HIGH_RISK
+                risk_scores.append(95)
+        
+        avg_risk_score = sum(risk_scores) // len(risk_scores) if risk_scores else 0
+        
+        return {
+            "totalTransactions": total,
+            "blockedRate": round((blocked / total) * 100, 2) if total > 0 else 0.0,
+            "suspiciousRate": round((suspicious / total) * 100, 2) if total > 0 else 0.0,
+            "avgRiskScore": avg_risk_score
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching metrics: {str(e)}")
+
+
+@api_v1_router.post("/admin/rules/reorder")
+async def reorder_rules(
+    reorder: RuleReorderRequest,
+    analyst_id: str = Header(..., alias="X-Analyst-ID")
+):
+    """
+    Reordena el Chain of Responsibility
+    
+    Permite cambiar el orden de ejecución de las reglas de fraude.
+    Implementación simplificada - en producción guardar en BD.
+    """
+    try:
+        # Validar que los IDs sean válidos
+        valid_rule_ids = {"rule_amount_threshold", "rule_location_check"}
+        invalid_ids = [rid for rid in reorder.ruleIds if rid not in valid_rule_ids]
+        
+        if invalid_ids:
+            raise ValueError(f"Invalid rule IDs: {invalid_ids}")
+        
+        # En producción, actualizar el orden en la base de datos
+        # Por ahora, solo retornar éxito
+        return {
+            "success": True,
+            "newOrder": [
+                {"id": rid, "order": idx + 1}
+                for idx, rid in enumerate(reorder.ruleIds)
+            ],
+            "updated_by": analyst_id
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reordering rules: {str(e)}")

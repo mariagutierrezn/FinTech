@@ -94,19 +94,29 @@ services:
     networks:
       - fraud-network
 
-  frontend:
+  frontend-user:
     build:
-      context: ./frontend/streamlit
+      context: ./frontend/user-app
       dockerfile: Dockerfile
-    container_name: fraud-frontend
+    container_name: fraud-frontend-user
     ports:
-      - "8501:8501"
-    environment:
-      API_URL: http://host.docker.internal:8000
-    networks:
-      - fraud-network
+      - "3000:80"
     depends_on:
       - api
+    networks:
+      - fraud-network
+
+  frontend-admin:
+    build:
+      context: ./frontend/admin-dashboard
+      dockerfile: Dockerfile
+    container_name: fraud-frontend-admin
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+    networks:
+      - fraud-network
 
 volumes:
   mongodb_data:
