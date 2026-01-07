@@ -42,10 +42,16 @@ export const reviewTransaction = async (
   decision: 'APPROVED' | 'REJECTED',
   comment?: string
 ): Promise<any> => {
+  console.log('🌐 API reviewTransaction:', { transactionId, decision, comment });
+  console.log('🌐 URL:', `/api/v1/transaction/review/${transactionId}`);
+  console.log('🌐 Body:', { decision, analyst_comment: comment });
+  
   const response = await api.put(`/api/v1/transaction/review/${transactionId}`, {
     decision,
     analyst_comment: comment,
   });
+  
+  console.log('🌐 Response:', response);
   return response.data;
 };
 

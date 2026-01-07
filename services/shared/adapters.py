@@ -95,7 +95,7 @@ class MongoDBAdapter(TransactionRepository):
         documents = self.evaluations.find().sort("timestamp", -1)
         return [self._document_to_evaluation(doc) for doc in documents]
 
-    async def get_evaluation_by_id(
+    def get_evaluation_by_id(
         self, transaction_id: str
     ) -> Optional[FraudEvaluation]:
         """
@@ -119,7 +119,7 @@ class MongoDBAdapter(TransactionRepository):
         documents = self.evaluations.find({"user_id": user_id}).sort("timestamp", -1)
         return [self._document_to_evaluation(doc) for doc in documents]
 
-    async def update_evaluation(self, evaluation: FraudEvaluation) -> None:
+    def update_evaluation(self, evaluation: FraudEvaluation) -> None:
         """
         Actualiza una evaluación existente
         

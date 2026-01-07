@@ -217,9 +217,14 @@ async def review_transaction(
     La IA sugirió recibir analyst_id en el body. Lo moví a un header
     para separar datos de autenticación de datos de negocio.
     """
+    from starlette.concurrency import run_in_threadpool
+    
     try:
         review_use_case = _review_use_case_factory()
-        await review_use_case.execute(transaction_id, review.decision, analyst_id)
+        # Ejecutar en thread pool para no bloquear el event loop
+        await run_in_threadpool(
+            review_use_case.execute, transaction_id, review.decision, analyst_id
+        )
         return {"status": "reviewed", "decision": review.decision}
     except ValueError as e:
         if "not found" in str(e).lower():

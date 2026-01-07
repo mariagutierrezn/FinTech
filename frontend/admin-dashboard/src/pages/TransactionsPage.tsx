@@ -24,14 +24,26 @@ export default function TransactionsPage() {
   };
 
   const handleReview = async (transactionId: string, decision: 'APPROVED' | 'REJECTED') => {
+    console.log('🔵 handleReview llamado:', { transactionId, decision });
     try {
-      await reviewTransaction(transactionId, decision);
+      console.log('🔵 Llamando a reviewTransaction...');
+      const result = await reviewTransaction(transactionId, decision);
+      console.log('✅ reviewTransaction exitoso:', result);
+      
       // Recargar transacciones para reflejar el cambio
+      console.log('🔵 Recargando transacciones...');
       await loadTransactions();
+      console.log('✅ Transacciones recargadas');
+      
       alert(`Transacción ${decision === 'APPROVED' ? 'aprobada' : 'rechazada'} exitosamente`);
-    } catch (error) {
-      console.error('Error reviewing transaction:', error);
-      alert('Error al revisar la transacción');
+    } catch (error: any) {
+      console.error('❌ Error reviewing transaction:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      alert(`Error al revisar la transacción: ${error.response?.data?.detail || error.message}`);
     }
   };
 
