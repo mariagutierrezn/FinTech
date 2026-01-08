@@ -323,24 +323,38 @@ async def validate_transaction_sync(transaction: TransactionValidateRequest):
         
         evaluate_use_case = EvaluateTransactionUseCase(repository, publisher, cache, strategies)
         
-        # Convertir location string a coordenadas (formato esperado: "Ciudad, País" con coordenadas mock)
-        # Para simplificar, usar coordenadas de ciudades comunes
-        location_coords = {
-            "New York": {"latitude": 40.7128, "longitude": -74.0060},
-            "Los Angeles": {"latitude": 34.0522, "longitude": -118.2437},
-            "Chicago": {"latitude": 41.8781, "longitude": -87.6298},
-            "Miami": {"latitude": 25.7617, "longitude": -80.1918},
-            "San Francisco": {"latitude": 37.7749, "longitude": -122.4194}
-        }
+        # Convertir location string a coordenadas
+        # Formato esperado: "lat,lon" (ej: "4.6097,-74.0817") o "Ciudad, País"
+        location_str = transaction.location.strip()
         
-        location_parts = transaction.location.split(", ")
-        city = location_parts[0] if len(location_parts) > 0 else "Unknown"
-        coords = location_coords.get(city, {"latitude": 40.7128, "longitude": -74.0060})
-        
-        location_dict = {
-            "latitude": coords["latitude"],
-            "longitude": coords["longitude"]
-        }
+        # Verificar si ya son coordenadas (formato: "lat,lon")
+        if ',' in location_str and len(location_str.split(',')) == 2:
+            try:
+                parts = location_str.split(',')
+                lat = float(parts[0].strip())
+                lon = float(parts[1].strip())
+                location_dict = {
+                    "latitude": lat,
+                    "longitude": lon
+                }
+            except ValueError:
+                # Si falla el parseo, usar coordenadas por defecto
+                location_dict = {"latitude": 40.7128, "longitude": -74.0060}
+        else:
+            # Mapeo de ciudades a coordenadas (fallback)
+            location_coords = {
+                "New York": {"latitude": 40.7128, "longitude": -74.0060},
+                "Los Angeles": {"latitude": 34.0522, "longitude": -118.2437},
+                "Chicago": {"latitude": 41.8781, "longitude": -87.6298},
+                "Miami": {"latitude": 25.7617, "longitude": -80.1918},
+                "San Francisco": {"latitude": 37.7749, "longitude": -122.4194},
+                "Bogota": {"latitude": 4.6097, "longitude": -74.0817},
+                "Medellin": {"latitude": 6.2442, "longitude": -75.5812},
+                "Cali": {"latitude": 3.4516, "longitude": -76.5320}
+            }
+            
+            city = location_str.split(",")[0].strip()
+            location_dict = location_coords.get(city, {"latitude": 40.7128, "longitude": -74.0060})
         
         # Preparar payload
         transaction_data = {

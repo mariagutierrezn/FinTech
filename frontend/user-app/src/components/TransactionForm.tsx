@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
-import { generateUserId, generateDeviceId } from '@/utils/formatters';
+import { LocationInput } from './LocationInput';
+import { generateDeviceId } from '@/utils/formatters';
 import type { TransactionRequest } from '@/types/transaction';
 
 interface TransactionFormProps {
@@ -15,8 +16,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
 }) => {
   const [formData, setFormData] = useState<TransactionRequest>({
     amount: 0,
-    userId: generateUserId(),
-    location: 'New York, USA',
+    userId: 'user_demo', // Usuario fijo para pruebas (en producción vendría de sesión/auth)
+    location: '', // Vacío para que el usuario ingrese o use GPS
     deviceId: generateDeviceId(),
   });
 
@@ -88,12 +89,14 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
         disabled={isLoading}
       />
 
-      <Input
-        label="Ubicación"
-        type="text"
-        placeholder="New York, USA"
+      <LocationInput
         value={formData.location}
-        onChange={handleChange('location')}
+        onChange={(value) => {
+          setFormData(prev => ({ ...prev, location: value }));
+          if (errors.location) {
+            setErrors(prev => ({ ...prev, location: undefined }));
+          }
+        }}
         error={errors.location}
         disabled={isLoading}
       />
