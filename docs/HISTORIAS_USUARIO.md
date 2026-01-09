@@ -117,7 +117,6 @@ Feature: Auditoría inmutable de evaluaciones
 
 **Estimación:** 5 puntos  
 **Prioridad:** Alta  
-**Dependencias:** HU-001
 
 ---
 
@@ -162,8 +161,6 @@ Feature: Detección por umbral de monto
 
 **Estimación:** 3 puntos  
 **Prioridad:** Alta  
-**Dependencias:** HU-001
-
 ---
 
 ### HU-004: Validación de Dispositivo Conocido
@@ -211,7 +208,6 @@ Feature: Validación de dispositivo conocido
 
 **Estimación:** 5 puntos  
 **Prioridad:** Media  
-**Dependencias:** HU-001
 
 ---
 
@@ -262,7 +258,6 @@ Feature: Detección de ubicación inusual
 
 **Estimación:** 5 puntos  
 **Prioridad:** Alta  
-**Dependencias:** HU-001
 
 ---
 
@@ -301,8 +296,7 @@ Feature: Detección de transacciones en cadena
 ```
 
 **Estimación:** 5 puntos  
-**Prioridad:** Media  
-**Dependencias:** HU-001, HU-002
+**Prioridad:** Media 
 
 ---
 
@@ -342,7 +336,6 @@ Feature: Detección de horario inusual
 
 **Estimación:** 5 puntos  
 **Prioridad:** Baja  
-**Dependencias:** HU-001, HU-002
 
 ---
 
@@ -398,7 +391,6 @@ Feature: Modificación dinámica de umbrales
 
 **Estimación:** 3 puntos  
 **Prioridad:** Alta  
-**Dependencias:** HU-003, HU-005
 
 ---
 
@@ -436,7 +428,6 @@ Feature: Consulta de configuración actual
 
 **Estimación:** 2 puntos  
 **Prioridad:** Media  
-**Dependencias:** HU-008
 
 ---
 
@@ -488,7 +479,6 @@ Feature: Gestión de reglas personalizadas
 
 **Estimación:** 8 puntos  
 **Prioridad:** Media  
-**Dependencias:** HU-008, HU-009
 
 ---
 
@@ -532,7 +522,6 @@ Feature: Encolamiento para revisión manual
 
 **Estimación:** 5 puntos  
 **Prioridad:** Alta  
-**Dependencias:** HU-001, HU-002
 
 ---
 
@@ -589,7 +578,6 @@ Feature: Revisión manual por analista
 
 **Estimación:** 8 puntos  
 **Prioridad:** Alta  
-**Dependencias:** HU-010
 
 ---
 
@@ -631,7 +619,6 @@ Feature: Historial de transacciones del usuario
 
 **Estimación:** 5 puntos  
 **Prioridad:** Media  
-**Dependencias:** HU-001, HU-002
 
 ---
 
@@ -674,7 +661,354 @@ Feature: Dashboard de métricas de fraude
 
 **Estimación:** 8 puntos  
 **Prioridad:** Media  
-**Dependencias:** HU-002, HU-010
+
+---
+
+## Epic 6: Frontend Admin Dashboard
+
+### HU-015: Visualizar Dashboard de Métricas Administrativo
+
+**Como** administrador  
+**Quiero** visualizar un dashboard con métricas de fraude en tiempo real  
+**Para** monitorear el estado del sistema de forma visual
+
+**Descripción:**  
+El dashboard administrativo debe mostrar KPIs visuales con total de transacciones, porcentajes de riesgo, tendencias en gráficos y transacciones recientes.
+
+**Criterios de Aceptación:**
+
+```gherkin
+Feature: Dashboard administrativo visual
+
+  Scenario: Visualización de KPIs principales
+    Given el administrador accede al dashboard
+    And existen transacciones en el sistema
+    When la página carga los datos
+    Then se muestran 4 tarjetas KPI con:
+      | KPI                     | Información mostrada        |
+      | Total Transacciones     | Número total y variación    |
+      | Bajo Riesgo             | Porcentaje y variación      |
+      | Riesgo Medio            | Porcentaje y variación      |
+      | Alto Riesgo             | Porcentaje y variación      |
+    And cada KPI muestra indicador visual de tendencia (↑/↓)
+
+  Scenario: Visualización de gráfico de tendencias
+    Given existen transacciones históricas
+    When el dashboard carga
+    Then se muestra un gráfico de líneas con tendencias temporales
+    And el gráfico incluye leyenda de colores por nivel de riesgo
+
+  Scenario: Lista de transacciones recientes
+    Given existen transacciones en las últimas 24 horas
+    When el dashboard carga
+    Then se muestra tabla con las 10 transacciones más recientes
+    And cada transacción muestra: ID, usuario, monto, estado, riesgo
+
+  Scenario: Estado de carga del dashboard
+    Given el administrador accede al dashboard
+    When los datos están siendo cargados
+    Then se muestra mensaje "Cargando..." con spinner
+    And no se muestran datos parciales
+```
+
+**Estimación:** 5 puntos  
+**Prioridad:** Alta  
+
+---
+
+### HU-016: Gestión de Transacciones desde UI Administrativa
+
+**Como** administrador  
+**Quiero** ver, filtrar y revisar transacciones desde el dashboard  
+**Para** aprobar o rechazar transacciones sospechosas
+
+**Descripción:**  
+La página de transacciones debe permitir listar todas las transacciones, filtrar por estado (ALL, SUSPICIOUS, APPROVED, REJECTED) y aprobar/rechazar con botones.
+
+**Criterios de Aceptación:**
+
+```gherkin
+Feature: Gestión visual de transacciones
+
+  Scenario: Listado completo de transacciones
+    Given el administrador accede a la página de transacciones
+    When la página carga
+    Then se muestra tabla con todas las transacciones
+    And cada fila incluye: ID, usuario, monto, ubicación, estado, nivel riesgo
+    And las transacciones están ordenadas por fecha descendente
+
+  Scenario: Filtrado por estado SUSPICIOUS
+    Given existen transacciones con diferentes estados
+    When el administrador selecciona filtro "SUSPICIOUS"
+    Then solo se muestran transacciones con status "SUSPICIOUS"
+    And se muestra contador "X transacciones sospechosas"
+
+  Scenario: Aprobación de transacción desde UI
+    Given una transacción con status "SUSPICIOUS"
+    When el administrador hace clic en botón "Aprobar"
+    Then se envía petición PUT al endpoint de review
+    And la transacción cambia a status "APPROVED"
+    And se muestra alerta "Transacción aprobada exitosamente"
+    And la tabla se actualiza automáticamente
+
+  Scenario: Rechazo de transacción desde UI
+    Given una transacción con status "SUSPICIOUS"
+    When el administrador hace clic en botón "Rechazar"
+    Then se envía petición PUT con decision "REJECTED"
+    And la transacción cambia a status "REJECTED"
+    And se muestra alerta de confirmación
+
+  Scenario: Indicador de carga al revisar
+    Given una transacción está siendo revisada
+    When se procesa la acción de aprobar/rechazar
+    Then se muestra indicador de carga durante el proceso
+    And los botones se deshabilitan temporalmente
+```
+
+**Estimación:** 5 puntos  
+**Prioridad:** Alta  
+
+---
+
+### HU-017: Gestión de Reglas desde UI Administrativa
+
+**Como** administrador  
+**Quiero** crear, editar y activar/desactivar reglas de fraude desde el dashboard  
+**Para** configurar el sistema sin modificar código
+
+**Descripción:**  
+La página de reglas debe permitir visualizar todas las reglas, editar sus parámetros, crear nuevas reglas personalizadas y cambiar su estado (enabled/disabled).
+
+**Criterios de Aceptación:**
+
+```gherkin
+Feature: Gestión visual de reglas de fraude
+
+  Scenario: Visualización de todas las reglas
+    Given existen reglas de fraude configuradas
+    When el administrador accede a la página de reglas
+    Then se muestra lista con todas las reglas
+    And cada regla muestra: nombre, tipo, estado (activa/inactiva), orden
+
+  Scenario: Edición de parámetros de regla existente
+    Given una regla "Amount Threshold" con threshold 1500
+    When el administrador hace clic en "Editar"
+    And modifica el parámetro threshold a 2000
+    And hace clic en "Guardar cambios"
+    Then se envía PUT a "/api/v1/admin/rules/{id}"
+    And se muestra toast "Regla actualizada exitosamente"
+    And la lista se refresca con el nuevo valor
+
+  Scenario: Activar/desactivar regla con toggle
+    Given una regla con estado enabled: true
+    When el administrador hace clic en el toggle de estado
+    Then se envía petición PATCH cambiando enabled a false
+    And el toggle cambia visualmente a "inactiva"
+    And se muestra feedback visual del cambio
+
+  Scenario: Crear nueva regla personalizada
+    Given el administrador quiere crear una regla nueva
+    When hace clic en botón "Crear nueva regla"
+    And completa el formulario con:
+      | campo      | valor                     |
+      | name       | Regla Custom VIP          |
+      | type       | custom                    |
+      | parameters | {"max_amount": 5000}      |
+      | enabled    | true                      |
+      | order      | 100                       |
+    And hace clic en "Crear"
+    Then se envía POST a "/api/v1/admin/rules"
+    And la nueva regla aparece en la lista
+    And se muestra toast "Regla creada exitosamente"
+
+  Scenario: Validación de JSON en parámetros
+    Given el administrador está editando parámetros de regla
+    When ingresa JSON inválido en el campo parameters
+    And intenta guardar
+    Then se muestra error "JSON inválido en parámetros"
+    And no se envía la petición al servidor
+```
+
+**Estimación:** 8 puntos  
+**Prioridad:** Alta  
+
+---
+
+## Epic 7: Frontend User App
+
+### HU-018: Crear Transacción desde UI de Usuario
+
+**Como** usuario final  
+**Quiero** enviar transacciones desde una interfaz web  
+**Para** que sean evaluadas por el sistema de fraude
+
+**Descripción:**  
+La aplicación de usuario debe proveer un formulario para crear transacciones con campos de userId, monto, ubicación GPS y deviceId, mostrando el resultado de la evaluación.
+
+**Criterios de Aceptación:**
+
+```gherkin
+Feature: Creación de transacción desde UI
+
+  Scenario: Envío exitoso de transacción
+    Given el usuario está en la página "Nueva Transacción"
+    When completa el formulario con:
+      | campo    | valor                |
+      | userId   | user_demo            |
+      | amount   | 500.00               |
+      | location | 4.7110,-74.0721      |
+      | deviceId | device_mobile_001    |
+    And hace clic en "Validar Transacción"
+    Then se muestra indicador de "Procesando..."
+    And se envía POST a "/api/v1/transaction/validate"
+    And se muestra el resultado con nivel de riesgo
+    And se muestra animación de resultado exitoso
+
+  Scenario: Visualización de resultado LOW_RISK
+    Given una transacción fue evaluada con riskScore "LOW_RISK"
+    When se muestra el resultado
+    Then se muestra tarjeta verde con título "Transacción Segura"
+    And se muestra mensaje "La transacción parece segura"
+    And se muestra lista de validaciones pasadas
+
+  Scenario: Visualización de resultado HIGH_RISK
+    Given una transacción fue evaluada con riskScore "HIGH_RISK"
+    When se muestra el resultado
+    Then se muestra tarjeta roja con título "Transacción Bloqueada"
+    And se muestra mensaje de advertencia
+    And se muestra lista de violaciones detectadas
+
+  Scenario: Selector de usuario persistente
+    Given el usuario selecciona "user_001" en el dropdown
+    When cierra y vuelve a abrir la aplicación
+    Then el selector mantiene "user_001" seleccionado
+    And el userId se almacena en localStorage
+
+  Scenario: Nueva transacción después de resultado
+    Given se mostró resultado de una transacción anterior
+    When el usuario hace clic en "Nueva Transacción"
+    Then el formulario se resetea a valores iniciales
+    And se oculta el resultado anterior
+```
+
+**Estimación:** 5 puntos  
+**Prioridad:** Alta  
+
+---
+
+### HU-019: Visualizar Historial de Transacciones en UI de Usuario
+
+**Como** usuario final  
+**Quiero** ver mis transacciones anteriores en una lista visual  
+**Para** revisar su estado y detalles
+
+**Descripción:**  
+La aplicación debe tener una página "Mis Transacciones" que liste todas las transacciones del usuario con filtros, mostrando estado, monto, ubicación y puntuación de riesgo.
+
+**Criterios de Aceptación:**
+
+```gherkin
+Feature: Historial visual de transacciones
+
+  Scenario: Navegación a página de transacciones
+    Given el usuario está en la página principal
+    When hace clic en "Mis Transacciones" en la navegación
+    Then se carga la página de transacciones
+    And se muestra indicador "Cargando transacciones..."
+
+  Scenario: Visualización de lista de transacciones
+    Given el usuario tiene 15 transacciones en el sistema
+    When la página de transacciones carga
+    Then se muestran las 15 transacciones en tarjetas
+    And cada tarjeta muestra: monto, fecha, ubicación, estado, riesgo
+    And las tarjetas están ordenadas por fecha descendente
+
+  Scenario: Visualización de estado APPROVED
+    Given una transacción tiene status "APPROVED"
+    When se muestra en la lista
+    Then la tarjeta tiene badge verde con texto "Aprobada"
+    And muestra ícono de check verde
+
+  Scenario: Visualización de estado SUSPICIOUS
+    Given una transacción tiene status "SUSPICIOUS"
+    When se muestra en la lista
+    Then la tarjeta tiene badge amarillo con texto "Pendiente"
+    And muestra mensaje "En revisión por analista"
+
+  Scenario: Visualización de violaciones detectadas
+    Given una transacción tiene violations: ["Amount exceeds threshold"]
+    When se expanden los detalles
+    Then se muestra lista de violaciones con íconos
+    And cada violación se muestra en formato legible
+
+  Scenario: Autenticación de transacción pendiente
+    Given una transacción tiene needsAuthentication: true
+    And userAuthenticated: null
+    When se muestra en la lista
+    Then se muestran botones "Confirmar" y "Rechazar"
+    And se muestra mensaje "¿Esta transacción fue realizada por ti?"
+
+  Scenario: Confirmación de transacción por usuario
+    Given una transacción requiere autenticación
+    When el usuario hace clic en "Sí, fui yo"
+    Then se envía POST a "/api/v1/transaction/{id}/authenticate"
+    And se muestra indicador de carga
+    And la transacción se actualiza con userAuthenticated: true
+    And desaparecen los botones de autenticación
+
+  Scenario: Rechazo de transacción por usuario
+    Given una transacción requiere autenticación
+    When el usuario hace clic en "No fui yo"
+    Then se envía POST con confirmed: false
+    And la transacción se marca como potencial fraude
+```
+
+**Estimación:** 8 puntos  
+**Prioridad:** Alta  
+
+---
+
+### HU-020: Cambio de Usuario en UI de Usuario
+
+**Como** usuario final  
+**Quiero** cambiar el userId activo desde un selector  
+**Para** simular diferentes usuarios y ver sus transacciones
+
+**Descripción:**  
+La aplicación debe proveer un selector de usuario (dropdown) que permita cambiar el userId activo y actualice automáticamente el contexto y las transacciones mostradas.
+
+**Criterios de Aceptación:**
+
+```gherkin
+Feature: Selector de usuario en frontend
+
+  Scenario: Selector visible en ambas páginas
+    Given el usuario está en cualquier página de la app
+    When observa la interfaz
+    Then ve un selector de usuarios en el header/navegación
+    And el selector muestra el userId activo actual
+
+  Scenario: Cambio de usuario en página de nueva transacción
+    Given el usuario selecciona "user_demo" en el selector
+    When cambia a "user_001" en el dropdown
+    Then el formulario de transacción se actualiza con userId "user_001"
+    And el cambio se persiste en localStorage
+
+  Scenario: Cambio de usuario en página de historial
+    Given el usuario está viendo transacciones de "user_demo"
+    When cambia a "user_002" en el selector
+    Then se recargan las transacciones de "user_002"
+    And se muestra indicador de carga durante el cambio
+
+  Scenario: Persistencia del usuario seleccionado
+    Given el usuario seleccionó "user_001"
+    When recarga la página del navegador
+    Then el selector mantiene "user_001" seleccionado
+    And se cargan las transacciones de "user_001"
+```
+
+**Estimación:** 3 puntos  
+**Prioridad:** Media  
 
 ---
 
@@ -686,11 +1020,66 @@ Feature: Dashboard de métricas de fraude
 | Epic 2: Reglas de Fraude | HU-003, HU-004, HU-005, HU-006, HU-007 | 23 |
 | Epic 3: Gobernanza | HU-008, HU-009, HU-011 | 13 |
 | Epic 4: Human in the Loop | HU-010, HU-012 | 13 |
-| Epic 5: Visualización | HU-013, HU-014 | 13 |
-| **TOTAL** | **14 Historias** | **70 puntos** |
+| Epic 5: Visualización API | HU-013, HU-014 | 13 |
+| Epic 6: Frontend Admin Dashboard | HU-015, HU-016, HU-017 | 18 |
+| Epic 7: Frontend User App | HU-018, HU-019, HU-020 | 16 |
+| **TOTAL** | **20 Historias** | **104 puntos** |
+
+---
+
+## Notas de Implementación
+
+### Funcionalidades Implementadas ✅
+
+**Backend:**
+- Recepción y evaluación asíncrona de transacciones (HU-001) ✅
+- Auditoría inmutable en MongoDB (HU-002) ✅
+- Regla de umbral de monto (HU-003) ✅
+- **Validación de dispositivo conocido (HU-004) ✅** 
+- Regla de ubicación inusual (HU-005) ✅
+- **Detección de transacciones en cadena (HU-006) ✅**
+- **Detección de horario inusual (HU-007) ✅**
+- Modificación dinámica de umbrales (HU-008, HU-009) ✅
+- Gestión de reglas personalizadas (HU-011) ✅
+- Cola de revisión manual para transacciones sospechosas (HU-010) ✅
+- Revisión manual por analista (HU-012) ✅
+- APIs de métricas y auditoría (HU-013, HU-014) ✅
+
+**Frontend Admin Dashboard:**
+- Dashboard con KPIs y métricas visuales (HU-015) ✅
+- Gestión y revisión de transacciones desde UI (HU-016) ✅
+- Creación, edición y activación/desactivación de reglas (HU-017) ✅
+
+**Frontend User App:**
+- Formulario de creación de transacciones (HU-018) ✅
+- Historial visual de transacciones del usuario (HU-019) ✅
+- Selector de usuario con persistencia (HU-020) ✅
+- Autenticación de transacciones por el usuario (HU-019) ✅
+
+### Estrategias de Fraude Implementadas
+
+El sistema cuenta con **5 estrategias de detección de fraude**:
+
+1. **AmountThresholdStrategy** (HU-003): Detecta transacciones que exceden umbral configurable ($1,500 por defecto)
+2. **LocationStrategy** (HU-005): Detecta transacciones desde ubicaciones lejanas (>100km de la última ubicación)
+3. **DeviceValidationStrategy** (HU-004): Valida que el dispositivo esté registrado para el usuario
+4. **RapidTransactionStrategy** (HU-006): Detecta más de 3 transacciones en 5 minutos
+5. **UnusualTimeStrategy** (HU-007): Detecta transacciones en horarios inusuales basados en el patrón del usuario
+
+Todas las estrategias siguen el patrón **Strategy** y se pueden activar/desactivar mediante configuración.
+
+### Funcionalidades NO Implementadas (Futuro)
+
+Las siguientes funcionalidades quedan fuera del alcance actual:
+
+❌ Gestión de usuarios y dispositivos desde UI Admin  
+❌ Exportación de reportes (CSV/PDF)  
+❌ Gestión de dispositivos registrados desde UI Usuario  
+❌ Sistema de notificaciones en tiempo real  
+❌ Autenticación real (OAuth/JWT)  
 
 ---
 
 **Documento creado:** Enero 2026  
-**Última actualización:** Enero 8, 2026  
-**Versión:** 1.0
+**Última actualización:** Enero 9, 2026  
+**Versión:** 2.1

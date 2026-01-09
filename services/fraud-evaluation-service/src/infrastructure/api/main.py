@@ -13,6 +13,8 @@ from ...application.interfaces import TransactionRepository, MessagePublisher, C
 from ...domain.strategies.amount_threshold import AmountThresholdStrategy
 from ...domain.strategies.location_check import LocationStrategy
 from ...domain.strategies.device_validation import DeviceValidationStrategy
+from ...domain.strategies.rapid_transaction import RapidTransactionStrategy
+from ...domain.strategies.unusual_time import UnusualTimeStrategy
 from ..adapters.mongodb import MongoDBAdapter
 from ..adapters.redis import RedisAdapter
 from ..adapters.rabbitmq import RabbitMQAdapter
@@ -61,18 +63,48 @@ rabbitmq_adapter = RabbitMQAdapter(
 fraud_strategies = [
     AmountThresholdStrategy(threshold=Decimal(str(settings.amount_threshold))),
     LocationStrategy(radius_km=settings.location_radius_km),
-    # DeviceValidationStrategy se puede agregar cuando tengamos device_id en las transacciones
+    # HU-006: RapidTransactionStrategy - Requiere Redis para tracking temporal
+    # Se inicializa dinámicamente en el use case para inyectar redis_adapter
+    # HU-007: UnusualTimeStrategy - Requiere MongoDB para historial
+    # Se inicializa dinámicamente en el use case para inyectar mongodb_adapter
 ]
 
 
 # Dependency Injection Factory para Use Cases
 def get_evaluate_use_case() -> EvaluateTransactionUseCase:
     """Factory para crear EvaluateTransactionUseCase con sus dependencias"""
+    # Crear estrategias dinámicas que requieren servicios
+    dynamic_strategies = fraud_strategies.copy()
+    
+    # HU-006: Agregar RapidTransactionStrategy con Redis
+    try:
+        dynamic_strategies.append(
+            RapidTransactionStrategy(
+                cache_service=redis_adapter,
+                transaction_limit=settings.rapid_tx_limit,
+                time_window_seconds=settings.rapid_tx_window
+            )
+        )
+    except Exception as e:
+        print(f"Warning: Could not initialize RapidTransactionStrategy: {e}")
+    
+    # HU-007: Agregar UnusualTimeStrategy con MongoDB
+    try:
+        dynamic_strategies.append(
+            UnusualTimeStrategy(
+                repository=mongodb_adapter,
+                min_transactions_for_pattern=settings.min_transactions_for_time_pattern,
+                outlier_threshold_hours=settings.unusual_time_threshold_hours
+            )
+        )
+    except Exception as e:
+        print(f"Warning: Could not initialize UnusualTimeStrategy: {e}")
+    
     return EvaluateTransactionUseCase(
         repository=mongodb_adapter,
         publisher=rabbitmq_adapter,
         cache=redis_adapter,
-        strategies=fraud_strategies,
+        strategies=dynamic_strategies,
     )
 
 

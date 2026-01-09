@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     # Fraud Rules
     amount_threshold: float = 1500.0
     location_radius_km: float = 100.0
+    
+    # Rapid Transaction Detection (HU-006)
+    rapid_tx_limit: int = 3  # Máximo de transacciones
+    rapid_tx_window: int = 300  # Ventana de tiempo en segundos (5 minutos)
+    
+    # Unusual Time Detection (HU-007)
+    min_transactions_for_time_pattern: int = 5  # Mínimo de transacciones para establecer patrón
+    unusual_time_threshold_hours: int = 4  # Diferencia en horas para considerar inusual
 
     class Config:
         env_file = ".env"
