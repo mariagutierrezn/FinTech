@@ -114,17 +114,23 @@ async def submit_transaction(transaction: TransactionRequest):
         
         # Crear estrategias
         from decimal import Decimal
-        from shared.config import settings
-        from shared.domain.strategies.amount_threshold import AmountThresholdStrategy
-        from shared.domain.strategies.location_check import LocationStrategy
+        from src.config import settings
+        from src.domain.strategies.amount_threshold import AmountThresholdStrategy
+        from src.domain.strategies.location_check import LocationStrategy
+        from src.domain.strategies.device_validation import DeviceValidationStrategy
+        from src.domain.strategies.rapid_transaction import RapidTransactionStrategy
+        from src.domain.strategies.unusual_time import UnusualTimeStrategy
         
         strategies = [
             AmountThresholdStrategy(Decimal(str(settings.amount_threshold))),
             LocationStrategy(settings.location_radius_km),
+            DeviceValidationStrategy(redis_client=cache.redis),
+            RapidTransactionStrategy(redis_client=cache.redis),
+            UnusualTimeStrategy(audit_repository=repository),
         ]
         
         # Crear e invocar use case
-        from shared.application.use_cases import EvaluateTransactionUseCase
+        from src.application.use_cases import EvaluateTransactionUseCase
         evaluate_use_case = EvaluateTransactionUseCase(repository, publisher, cache, strategies)
         
         result = await evaluate_use_case.execute(transaction.model_dump())
@@ -224,7 +230,7 @@ async def review_transaction(
     para separar datos de autenticación de datos de negocio.
     """
     from starlette.concurrency import run_in_threadpool
-    from shared.application.use_cases import ReviewTransactionUseCase
+    from src.application.use_cases import ReviewTransactionUseCase
     
     try:
         # Instanciar el use case correctamente
@@ -308,17 +314,23 @@ async def validate_transaction_sync(transaction: TransactionValidateRequest):
         publisher = _publisher_factory()
         
         # Crear estrategias
-        from shared.config import settings
-        from shared.domain.strategies.amount_threshold import AmountThresholdStrategy
-        from shared.domain.strategies.location_check import LocationStrategy
+        from src.config import settings
+        from src.domain.strategies.amount_threshold import AmountThresholdStrategy
+        from src.domain.strategies.location_check import LocationStrategy
+        from src.domain.strategies.device_validation import DeviceValidationStrategy
+        from src.domain.strategies.rapid_transaction import RapidTransactionStrategy
+        from src.domain.strategies.unusual_time import UnusualTimeStrategy
         
         strategies = [
             AmountThresholdStrategy(Decimal(str(settings.amount_threshold))),
             LocationStrategy(settings.location_radius_km),
+            DeviceValidationStrategy(redis_client=cache.redis),
+            RapidTransactionStrategy(redis_client=cache.redis),
+            UnusualTimeStrategy(audit_repository=repository),
         ]
         
         # Crear e invocar use case
-        from shared.application.use_cases import EvaluateTransactionUseCase
+        from src.application.use_cases import EvaluateTransactionUseCase
         import uuid
         
         evaluate_use_case = EvaluateTransactionUseCase(repository, publisher, cache, strategies)
@@ -409,7 +421,7 @@ async def get_rules():
         # Obtener configuración actual de umbrales
         config = await cache.get_threshold_config()
         
-        from shared.config import settings
+        from src.config import settings
         amount_threshold = config.get("amount_threshold", settings.amount_threshold) if config else settings.amount_threshold
         location_radius = config.get("location_radius_km", settings.location_radius_km) if config else settings.location_radius_km
         
@@ -434,15 +446,71 @@ async def get_rules():
                 },
                 "enabled": True,
                 "order": 2
+            },
+            {
+                "id": "rule_device_validation",
+                "name": "RuleValidacionDispositivo",
+                "type": "device_validation",
+                "parameters": {
+                    "device_memory_days": 90
+                },
+                "enabled": True,
+                "order": 3
+            },
+            {
+                "id": "rule_rapid_transaction",
+                "name": "RuleTransaccionesRapidas",
+                "type": "rapid_transaction",
+                "parameters": {
+                    "max_transactions": 3,
+                    "time_window_minutes": 5
+                },
+                "enabled": True,
+                "order": 4
+            },
+            {
+                "id": "rule_unusual_time",
+                "name": "RuleHorarioInusual",
+                "type": "unusual_time",
+                "parameters": {
+                    "deviation_threshold": 0.3
+                },
+                "enabled": True,
+                "order": 5
             }
         ]
         
-        # Obtener reglas personalizadas de MongoDB
+        # Obtener reglas ELIMINADAS de Redis (estas NO deben aparecer)
+        deleted_rules = set()
+        try:
+            cache = _cache_factory()
+            deleted_set = await cache.redis.smembers("deleted_default_rules")
+            deleted_rules = {r.decode('utf-8') if isinstance(r, bytes) else r for r in deleted_set}
+        except Exception as e:
+            print(f"Error loading deleted rules: {e}")
+        
+        # Filtrar reglas ELIMINADAS (no deben aparecer en la lista)
+        default_rules = [r for r in default_rules if r["id"] not in deleted_rules]
+        
+        # Obtener reglas DESHABILITADAS de Redis (estas sí deben aparecer pero con enabled=false)
+        disabled_rules = set()
+        try:
+            disabled_set = await cache.redis.smembers("disabled_default_rules")
+            disabled_rules = {r.decode('utf-8') if isinstance(r, bytes) else r for r in disabled_set}
+        except Exception as e:
+            print(f"Error loading disabled rules: {e}")
+        
+        # Marcar reglas predeterminadas deshabilitadas (NO filtrarlas)
+        for rule in default_rules:
+            if rule["id"] in disabled_rules:
+                rule["enabled"] = False
+        
+        # Obtener reglas personalizadas de MongoDB (TODAS, no solo enabled)
         custom_rules = []
         try:
             repository = _repository_factory()
             if hasattr(repository, 'db'):
-                cursor = repository.db.custom_rules.find({"enabled": True})
+                cursor = repository.db.custom_rules.find({})
                 for rule_doc in cursor:
                     custom_rules.append({
                         "id": rule_doc["id"],
@@ -479,6 +547,34 @@ async def update_rule(
     try:
         cache = _cache_factory()
         
+        # Manejar cambio de estado enabled para reglas predeterminadas
+        if "enabled" in rule_params.parameters:
+            enabled = rule_params.parameters.get("enabled")
+            default_rule_ids = {
+                "rule_amount_threshold",
+                "rule_location_check",
+                "rule_device_validation",
+                "rule_rapid_transaction",
+                "rule_unusual_time"
+            }
+            
+            if rule_id in default_rule_ids:
+                if enabled == False:
+                    # Desactivar: agregar a Redis
+                    await cache.redis.sadd("disabled_default_rules", rule_id)
+                else:
+                    # Activar: remover de Redis
+                    await cache.redis.srem("disabled_default_rules", rule_id)
+                
+                return {
+                    "success": True,
+                    "rule": {
+                        "id": rule_id,
+                        "enabled": enabled,
+                        "updated_by": analyst_id
+                    }
+                }
+        
         # Actualizar según el tipo de regla
         if rule_id == "rule_amount_threshold":
             threshold = rule_params.parameters.get("threshold")
@@ -488,7 +584,7 @@ async def update_rule(
             # Obtener config actual
             config = await cache.get_threshold_config()
             if config is None:
-                from shared.config import settings
+                from src.config import settings
                 config = {
                     "amount_threshold": settings.amount_threshold,
                     "location_radius_km": settings.location_radius_km
@@ -506,7 +602,7 @@ async def update_rule(
             # Obtener config actual
             config = await cache.get_threshold_config()
             if config is None:
-                from shared.config import settings
+                from src.config import settings
                 config = {
                     "amount_threshold": settings.amount_threshold,
                     "location_radius_km": settings.location_radius_km
@@ -515,8 +611,41 @@ async def update_rule(
             # Actualizar radius
             config["location_radius_km"] = radius_km
             await cache.set_threshold_config(**config)
+            
+        elif rule_id in ["rule_device_validation", "rule_rapid_transaction", "rule_unusual_time"]:
+            # Estas reglas son predeterminadas pero no tienen configuración editable en caché
+            # Se mantienen con sus parámetros por defecto
+            return {
+                "success": True,
+                "rule": {
+                    "id": rule_id,
+                    "parameters": rule_params.parameters,
+                    "updated_by": analyst_id,
+                    "note": "Default rule parameters cannot be modified via API"
+                }
+            }
         else:
-            raise HTTPException(status_code=404, detail="Rule not found")
+            # Intentar actualizar regla personalizada en MongoDB
+            repository = _repository_factory()
+            if hasattr(repository, 'db'):
+                update_data = {
+                    "parameters": rule_params.parameters,
+                    "updated_at": datetime.now(),
+                    "updated_by": analyst_id
+                }
+                
+                # Si viene el campo enabled, actualizarlo también
+                if "enabled" in rule_params.parameters:
+                    update_data["enabled"] = rule_params.parameters["enabled"]
+                
+                result = repository.db.custom_rules.update_one(
+                    {"id": rule_id},
+                    {"$set": update_data}
+                )
+                if result.matched_count == 0:
+                    raise HTTPException(status_code=404, detail="Rule not found")
+            else:
+                raise HTTPException(status_code=404, detail="Rule not found")
         
         return {
             "success": True,
@@ -763,31 +892,47 @@ async def delete_rule(
     analyst_id: str = Header(..., alias="X-Analyst-ID")
 ):
     """
-    Elimina una regla personalizada
+    Elimina permanentemente una regla (predeterminada o personalizada)
     
-    Solo se pueden eliminar reglas personalizadas, no las predeterminadas.
+    Las reglas predeterminadas se marcan como ELIMINADAS en Redis (deleted_default_rules).
+    Las reglas personalizadas se eliminan de MongoDB.
     """
     try:
-        # No permitir eliminar reglas predeterminadas
-        if rule_id in ["rule_amount_threshold", "rule_location_check"]:
-            raise HTTPException(
-                status_code=403, 
-                detail="Cannot delete default rules"
-            )
-        
-        # Eliminar de MongoDB
-        repository = _repository_factory()
-        if hasattr(repository, 'db'):
-            result = repository.db.custom_rules.delete_one({"id": rule_id})
-            
-            if result.deleted_count == 0:
-                raise HTTPException(status_code=404, detail="Rule not found")
-        
-        return {
-            "success": True,
-            "message": "Rule deleted successfully",
-            "deleted_by": analyst_id
+        # IDs de reglas predeterminadas
+        default_rule_ids = {
+            "rule_amount_threshold",
+            "rule_location_check",
+            "rule_device_validation",
+            "rule_rapid_transaction",
+            "rule_unusual_time"
         }
+        
+        if rule_id in default_rule_ids:
+            # Para reglas predeterminadas: marcar como ELIMINADA en Redis
+            cache = _cache_factory()
+            await cache.redis.sadd("deleted_default_rules", rule_id)
+            # También remover de disabled si estaba ahí
+            await cache.redis.srem("disabled_default_rules", rule_id)
+            
+            return {
+                "success": True,
+                "message": "Default rule deleted permanently",
+                "deleted_by": analyst_id
+            }
+        else:
+            # Para reglas personalizadas: eliminar de MongoDB
+            repository = _repository_factory()
+            if hasattr(repository, 'db'):
+                result = repository.db.custom_rules.delete_one({"id": rule_id})
+                
+                if result.deleted_count == 0:
+                    raise HTTPException(status_code=404, detail="Rule not found")
+            
+            return {
+                "success": True,
+                "message": "Custom rule deleted successfully",
+                "deleted_by": analyst_id
+            }
     except HTTPException:
         raise
     except Exception as e:

@@ -9,16 +9,16 @@ para permitir inyección y facilitar testing (Dependency Injection pattern).
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from decimal import Decimal
-from src.routes import router
-from shared.adapters import (
+from api_gateway.routes import router
+from src.adapters import (
     MongoDBAdapter,
     RedisAdapter,
     RabbitMQAdapter,
 )
-from shared.config import settings
-from shared.domain.strategies.amount_threshold import AmountThresholdStrategy
-from shared.domain.strategies.location_check import LocationStrategy
-from shared.application.use_cases import (
+from src.config import settings
+from src.domain.strategies.amount_threshold import AmountThresholdStrategy
+from src.domain.strategies.location_check import LocationStrategy
+from src.application.use_cases import (
     EvaluateTransactionUseCase,
     ReviewTransactionUseCase,
 )
@@ -91,7 +91,7 @@ def get_review_use_case(repository=Depends(get_repository)):
 
 
 # Registrar rutas con dependency injection
-from src.routes import router, api_v1_router, configure_dependencies
+from api_gateway.routes import router, api_v1_router, configure_dependencies
 
 configure_dependencies(
     repository_factory=get_repository,

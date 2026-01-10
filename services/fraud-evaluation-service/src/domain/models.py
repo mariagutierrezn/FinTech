@@ -191,3 +191,4 @@ class FraudEvaluation:
         """
         self.user_authenticated = confirmed
         self.user_auth_timestamp = datetime.now()
+

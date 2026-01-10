@@ -14,7 +14,7 @@ y evitar que los adaptadores implementen métodos innecesarios.
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from services.shared.domain.models import FraudEvaluation
+from src.domain.models import FraudEvaluation
 
 
 class TransactionRepository(ABC):
@@ -201,3 +201,4 @@ class CacheService(ABC):
             CacheError: Si falla el almacenamiento
         """
         pass
+

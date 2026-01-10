@@ -16,8 +16,8 @@ Esto previene falsos positivos en transacciones exactamente en el límite.
 """
 from decimal import Decimal
 from typing import Dict, Any, Optional
-from services.shared.domain.strategies.base import FraudStrategy
-from services.shared.domain.models import Transaction, RiskLevel, Location
+from src.domain.strategies.base import FraudStrategy
+from src.domain.models import Transaction, RiskLevel, Location
 
 
 class AmountThresholdStrategy(FraudStrategy):
@@ -75,3 +75,4 @@ class AmountThresholdStrategy(FraudStrategy):
             }
 
         return {"risk_level": RiskLevel.LOW_RISK, "reasons": [], "details": ""}
+

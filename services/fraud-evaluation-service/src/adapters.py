@@ -18,13 +18,13 @@ from pymongo import MongoClient
 import redis.asyncio as redis_async
 import pika
 import json
-from shared.application.interfaces import (
+from src.application.interfaces import (
     TransactionRepository,
     MessagePublisher,
     CacheService,
 )
-from shared.domain.models import FraudEvaluation, RiskLevel
-from shared.config import settings
+from src.domain.models import FraudEvaluation, RiskLevel
+from src.config import settings
 
 
 class MongoDBAdapter(TransactionRepository):
@@ -156,7 +156,7 @@ class MongoDBAdapter(TransactionRepository):
         
         location = None
         if document.get("location"):
-            from shared.domain.models import Location
+            from src.domain.models import Location
             location = Location(
                 latitude=document["location"]["latitude"],
                 longitude=document["location"]["longitude"]
@@ -352,3 +352,4 @@ class RabbitMQAdapter(MessagePublisher):
         """
         if self._connection and not self._connection.is_closed:
             self._connection.close()
+
