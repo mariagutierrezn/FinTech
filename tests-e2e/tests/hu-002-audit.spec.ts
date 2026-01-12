@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { randomUUID } from 'crypto';
 
 /**
  * E2E Tests para HU-002: Auditoría Inmutable de Evaluaciones
@@ -71,7 +72,7 @@ test.describe('HU-002: Auditoría Inmutable de Evaluaciones', () => {
     for (const tx of transactions) {
       const response = await request.post(`${API_BASE_URL}/transaction`, {
         data: {
-          id: `txn_${userId}_${Date.now()}_${Math.random()}`,
+          id: `txn_${userId}_${Date.now()}_${randomUUID().substring(0, 8)}`,
           user_id: userId,
           amount: tx.amount,
           location: tx.location,

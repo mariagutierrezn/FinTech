@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { randomUUID } from 'crypto';
 
 /**
  * E2E Tests para HU-013: Dashboard Usuario - Historial de Transacciones
@@ -31,7 +32,7 @@ test.describe('HU-013: Dashboard Usuario - Historial de Transacciones', () => {
       const [lat, lng] = tx.location.split(',').map(Number);
       await request.post(`${API_BASE_URL}/transaction`, {
         data: {
-          id: `tx_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          id: `tx_${userId}_${Date.now()}_${randomUUID().substring(0, 8)}`,
           user_id: userId,
           amount: tx.amount,
           location: { latitude: lat, longitude: lng },
@@ -74,7 +75,7 @@ test.describe('HU-013: Dashboard Usuario - Historial de Transacciones', () => {
 
     await request.post(`${API_BASE_URL}/transaction`, {
       data: {
-        id: `tx_${user1}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        id: `tx_${user1}_${Date.now()}_${randomUUID().substring(0, 8)}`,
         user_id: user1,
         amount: 200,
         location: { latitude: 4.711, longitude: -74.0721 },
@@ -84,7 +85,7 @@ test.describe('HU-013: Dashboard Usuario - Historial de Transacciones', () => {
 
     await request.post(`${API_BASE_URL}/transaction`, {
       data: {
-        id: `tx_${user2}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        id: `tx_${user2}_${Date.now()}_${randomUUID().substring(0, 8)}`,
         user_id: user2,
         amount: 300,
         location: { latitude: 4.711, longitude: -74.0721 },
@@ -123,7 +124,7 @@ test.describe('HU-013: Dashboard Usuario - Historial de Transacciones', () => {
     
     await request.post(`${API_BASE_URL}/transaction`, {
       data: {
-        id: `tx_${userId}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        id: `tx_${userId}_${Date.now()}_${randomUUID().substring(0, 8)}`,
         user_id: userId,
         amount: 100,
         location: { latitude: 4.711, longitude: -74.0721 },
