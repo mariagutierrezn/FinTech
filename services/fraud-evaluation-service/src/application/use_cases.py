@@ -177,6 +177,7 @@ class EvaluateTransactionUseCase:
                 user_id=data["user_id"],
                 location=location,
                 timestamp=timestamp,
+                device_id=data.get("device_id"),
             )
         except KeyError as e:
             raise ValueError(f"Missing required field: {e}")

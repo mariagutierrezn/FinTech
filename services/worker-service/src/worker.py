@@ -41,8 +41,8 @@ def create_use_case() -> EvaluateTransactionUseCase:
     strategies = [
         AmountThresholdStrategy(threshold=Decimal(str(settings.amount_threshold))),
         LocationStrategy(radius_km=settings.location_radius_km),
-        DeviceValidationStrategy(redis_client=cache.redis),
-        RapidTransactionStrategy(redis_client=cache.redis),
+        DeviceValidationStrategy(redis_client=cache.redis_sync),
+        RapidTransactionStrategy(redis_client=cache.redis_sync),
         UnusualTimeStrategy(audit_repository=repository),
     ]
 

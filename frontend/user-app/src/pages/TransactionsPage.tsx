@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Card } from '../components/ui/Card';
 import { getUserTransactions, authenticateTransaction } from '../services/api';
 import { useUser } from '../context/UserContext';
+import { translateViolation } from '../utils/translations';
 
 interface Transaction {
   id: string;
@@ -181,7 +182,7 @@ export function TransactionsPage() {
                         <p className="text-xs font-medium text-orange-800 mb-2">MOTIVOS:</p>
                         <ul className="text-sm text-orange-700 space-y-1">
                           {tx.violations.map((v, i) => (
-                            <li key={i}>• {v}</li>
+                            <li key={i}>• {translateViolation(v)}</li>
                           ))}
                         </ul>
                       </div>

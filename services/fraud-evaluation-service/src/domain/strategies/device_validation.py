@@ -42,6 +42,9 @@ class DeviceValidationStrategy(FraudStrategy):
             user_id = transaction.user_id
             device_id = transaction.device_id
             
+            # DEBUG: Imprimir lo que recibimos
+            print(f"[DeviceValidation] user_id={user_id}, device_id={device_id}, type={type(device_id)}")
+            
             if not device_id:
                 return {
                     "risk_level": RiskLevel.MEDIUM_RISK,
@@ -56,9 +59,10 @@ class DeviceValidationStrategy(FraudStrategy):
             is_known_device = self.redis_client.sismember(redis_key, device_id)
             
             if is_known_device:
+                # Dispositivo conocido - no agregar a violaciones
                 return {
                     "risk_level": RiskLevel.LOW_RISK,
-                    "reasons": ["Dispositivo reconocido"],
+                    "reasons": [],  # Sin violaciones
                     "details": f"Dispositivo {device_id} registrado previamente para usuario {user_id}"
                 }
             else:

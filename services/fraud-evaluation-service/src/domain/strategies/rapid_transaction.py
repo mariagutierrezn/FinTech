@@ -36,16 +36,16 @@ class RapidTransactionStrategy(FraudStrategy):
         """Retorna el nombre de la estrategia."""
         return "rapid_transaction"
     
-    def evaluate(self, transaction: Transaction, context: Dict[str, Any]) -> RiskLevel:
+    def evaluate(self, transaction: Transaction, historical_location=None) -> Dict[str, Any]:
         """
         Evalúa si la transacción es parte de un patrón de transacciones rápidas.
         
         Args:
             transaction: La transacción a evaluar
-            context: Contexto adicional de evaluación
+            historical_location: No usado en esta estrategia
             
         Returns:
-            RiskLevel: ALTO si supera el límite, MEDIO si se acerca, BAJO en caso contrario
+            Dict con risk_level, reasons y details
         """
         try:
             user_id = transaction.user_id
@@ -54,17 +54,10 @@ class RapidTransactionStrategy(FraudStrategy):
             # Clave de Redis para este usuario
             redis_key = f"rapid_tx:{user_id}"
             
-            # Obtener transacciones recientes de Redis
-            recent_transactions = self.redis_client.zrangebyscore(
-                redis_key,
-                current_time.timestamp() - self.window_seconds,
-                current_time.timestamp()
-            )
-            
-            # Añadir la transacción actual
+            # Añadir la transacción actual PRIMERO
             self.redis_client.zadd(
                 redis_key,
-                {transaction.transaction_id: current_time.timestamp()}
+                {transaction.id: current_time.timestamp()}
             )
             
             # Establecer expiración de la clave
@@ -77,21 +70,37 @@ class RapidTransactionStrategy(FraudStrategy):
                 current_time.timestamp() - self.window_seconds
             )
             
-            # Contar transacciones en la ventana (incluyendo la actual)
-            transaction_count = len(recent_transactions) + 1
+            # Contar transacciones en la ventana (incluyendo la actual que acabamos de añadir)
+            transaction_count = self.redis_client.zcount(
+                redis_key,
+                current_time.timestamp() - self.window_seconds,
+                current_time.timestamp()
+            )
             
             # Evaluar riesgo según el número de transacciones
+            # Solo mostrar violación cuando se SUPERA el límite
             if transaction_count > self.max_transactions:
-                return RiskLevel.HIGH
-            elif transaction_count == self.max_transactions:
-                return RiskLevel.MEDIUM
+                return {
+                    "risk_level": RiskLevel.HIGH_RISK,
+                    "reasons": ["rapid_transactions_detected"],
+                    "details": f"{transaction_count} transactions in {self.window_minutes} minutes (limit: {self.max_transactions})"
+                }
             else:
-                return RiskLevel.LOW
+                # 3 o menos transacciones = OK (sin violación)
+                return {
+                    "risk_level": RiskLevel.LOW_RISK,
+                    "reasons": [],
+                    "details": f"{transaction_count} transactions in {self.window_minutes} minutes"
+                }
                 
         except Exception as e:
             # En caso de error con Redis, retornar riesgo bajo para no bloquear
             print(f"Error en RapidTransactionStrategy: {e}")
-            return RiskLevel.LOW
+            return {
+                "risk_level": RiskLevel.LOW_RISK,
+                "reasons": ["rapid_transaction_check_failed"],
+                "details": "Could not check rapid transactions"
+            }
     
     def get_reason(self, transaction: Transaction, risk_level: RiskLevel) -> str:
         """

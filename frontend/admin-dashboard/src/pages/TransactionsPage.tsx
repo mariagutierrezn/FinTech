@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getTransactionsLog, reviewTransaction } from '@/services/api';
+import { translateViolation } from '@/utils/translations';
 import type { Transaction } from '@/types';
 
 export default function TransactionsPage() {
@@ -151,7 +152,7 @@ export default function TransactionsPage() {
                         <div className="flex flex-wrap gap-1">
                           {tx.violations.slice(0, 2).map((v, i) => (
                             <span key={i} className="px-2 py-1 bg-gray-700 rounded text-xs">
-                              {v}
+                              {translateViolation(v)}
                             </span>
                           ))}
                         </div>

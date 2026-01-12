@@ -46,7 +46,7 @@ class TransactionValidateRequest(BaseModel):
     amount: float = Field(..., gt=0, description="Transaction amount")
     userId: str = Field(..., description="User ID")
     location: str = Field(..., description="Location string")
-    deviceId: str = Field(..., description="Device ID")
+    deviceId: Optional[str] = Field(None, description="Device ID (optional)")
 
 
 class RuleParametersRequest(BaseModel):
@@ -124,8 +124,8 @@ async def submit_transaction(transaction: TransactionRequest):
         strategies = [
             AmountThresholdStrategy(Decimal(str(settings.amount_threshold))),
             LocationStrategy(settings.location_radius_km),
-            DeviceValidationStrategy(redis_client=cache.redis),
-            RapidTransactionStrategy(redis_client=cache.redis),
+            DeviceValidationStrategy(redis_client=cache.redis_sync),
+            RapidTransactionStrategy(redis_client=cache.redis_sync),
             UnusualTimeStrategy(audit_repository=repository),
         ]
         
@@ -308,12 +308,23 @@ async def validate_transaction_sync(transaction: TransactionValidateRequest):
     Retorna resultado inmediato con status, riskScore y violations.
     """
     try:
+        # DEBUG: Ver qué llega
+        print(f"[ROUTE] Received - userId: {transaction.userId}, deviceId: {transaction.deviceId}")
+        
         # Instanciar dependencias
         repository = _repository_factory()
         cache = _cache_factory()
         publisher = _publisher_factory()
         
-        # Crear estrategias
+        # Obtener reglas deshabilitadas
+        disabled_rules = set()
+        try:
+            disabled_set = await cache.redis.smembers("disabled_default_rules")
+            disabled_rules = {r.decode('utf-8') if isinstance(r, bytes) else r for r in disabled_set}
+        except Exception as e:
+            print(f"Error loading disabled rules: {e}")
+        
+        # Crear estrategias dinámicamente leyendo configuración desde Redis
         from src.config import settings
         from src.domain.strategies.amount_threshold import AmountThresholdStrategy
         from src.domain.strategies.location_check import LocationStrategy
@@ -321,13 +332,35 @@ async def validate_transaction_sync(transaction: TransactionValidateRequest):
         from src.domain.strategies.rapid_transaction import RapidTransactionStrategy
         from src.domain.strategies.unusual_time import UnusualTimeStrategy
         
-        strategies = [
-            AmountThresholdStrategy(Decimal(str(settings.amount_threshold))),
-            LocationStrategy(settings.location_radius_km),
-            DeviceValidationStrategy(redis_client=cache.redis),
-            RapidTransactionStrategy(redis_client=cache.redis),
-            UnusualTimeStrategy(audit_repository=repository),
-        ]
+        strategies = []
+        
+        # 1. AmountThresholdStrategy
+        if "rule_amount_threshold" not in disabled_rules:
+            config = await cache.get_threshold_config()
+            threshold = config.get("amount_threshold", settings.amount_threshold) if config else settings.amount_threshold
+            strategies.append(AmountThresholdStrategy(Decimal(str(threshold))))
+        
+        # 2. LocationStrategy
+        if "rule_location_check" not in disabled_rules:
+            config = await cache.get_threshold_config()
+            radius_km = config.get("location_radius_km", settings.location_radius_km) if config else settings.location_radius_km
+            strategies.append(LocationStrategy(radius_km))
+        
+        # 3. DeviceValidationStrategy
+        if "rule_device_validation" not in disabled_rules:
+            strategies.append(DeviceValidationStrategy(redis_client=cache.redis_sync))
+        
+        # 4. RapidTransactionStrategy
+        if "rule_rapid_transaction" not in disabled_rules:
+            max_transactions_str = await cache.redis.get("rule_config:rule_rapid_transaction:max_transactions")
+            time_window_minutes_str = await cache.redis.get("rule_config:rule_rapid_transaction:time_window_minutes")
+            max_transactions = int(max_transactions_str) if max_transactions_str else 3
+            time_window_minutes = int(time_window_minutes_str) if time_window_minutes_str else 5
+            strategies.append(RapidTransactionStrategy(redis_client=cache.redis_sync, max_transactions=max_transactions, window_minutes=time_window_minutes))
+        
+        # 5. UnusualTimeStrategy
+        if "rule_unusual_time" not in disabled_rules:
+            strategies.append(UnusualTimeStrategy(audit_repository=repository))
         
         # Crear e invocar use case
         from src.application.use_cases import EvaluateTransactionUseCase
@@ -374,8 +407,12 @@ async def validate_transaction_sync(transaction: TransactionValidateRequest):
             "amount": transaction.amount,
             "user_id": transaction.userId,
             "location": location_dict,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "device_id": transaction.deviceId
         }
+        
+        # DEBUG: Ver payload completo
+        print(f"[ROUTE] transaction_data: device_id={transaction_data.get('device_id')}")
         
         result = await evaluate_use_case.execute(transaction_data)
         
@@ -479,6 +516,34 @@ async def get_rules():
                 "order": 5
             }
         ]
+        
+        # Leer parámetros personalizados desde Redis si existen
+        try:
+            # rule_device_validation
+            device_memory_days = await cache.redis.get("rule_config:rule_device_validation:device_memory_days")
+            if device_memory_days:
+                for rule in default_rules:
+                    if rule["id"] == "rule_device_validation":
+                        rule["parameters"]["device_memory_days"] = int(device_memory_days)
+            
+            # rule_rapid_transaction
+            max_transactions = await cache.redis.get("rule_config:rule_rapid_transaction:max_transactions")
+            time_window_minutes = await cache.redis.get("rule_config:rule_rapid_transaction:time_window_minutes")
+            for rule in default_rules:
+                if rule["id"] == "rule_rapid_transaction":
+                    if max_transactions:
+                        rule["parameters"]["max_transactions"] = int(max_transactions)
+                    if time_window_minutes:
+                        rule["parameters"]["time_window_minutes"] = int(time_window_minutes)
+            
+            # rule_unusual_time
+            deviation_threshold = await cache.redis.get("rule_config:rule_unusual_time:deviation_threshold")
+            if deviation_threshold:
+                for rule in default_rules:
+                    if rule["id"] == "rule_unusual_time":
+                        rule["parameters"]["deviation_threshold"] = float(deviation_threshold)
+        except Exception as e:
+            print(f"Error loading custom rule parameters from Redis: {e}")
         
         # Obtener reglas ELIMINADAS de Redis (estas NO deben aparecer)
         deleted_rules = set()
@@ -612,16 +677,62 @@ async def update_rule(
             config["location_radius_km"] = radius_km
             await cache.set_threshold_config(**config)
             
-        elif rule_id in ["rule_device_validation", "rule_rapid_transaction", "rule_unusual_time"]:
-            # Estas reglas son predeterminadas pero no tienen configuración editable en caché
-            # Se mantienen con sus parámetros por defecto
+        elif rule_id == "rule_device_validation":
+            # Parámetros editables: device_memory_days
+            device_memory_days = rule_params.parameters.get("device_memory_days")
+            if device_memory_days is not None:
+                if device_memory_days <= 0:
+                    raise ValueError("device_memory_days must be positive")
+                # Guardar en Redis
+                await cache.redis.set(f"rule_config:{rule_id}:device_memory_days", str(device_memory_days))
+            
             return {
                 "success": True,
                 "rule": {
                     "id": rule_id,
                     "parameters": rule_params.parameters,
-                    "updated_by": analyst_id,
-                    "note": "Default rule parameters cannot be modified via API"
+                    "updated_by": analyst_id
+                }
+            }
+            
+        elif rule_id == "rule_rapid_transaction":
+            # Parámetros editables: max_transactions, time_window_minutes
+            max_transactions = rule_params.parameters.get("max_transactions")
+            time_window_minutes = rule_params.parameters.get("time_window_minutes")
+            
+            if max_transactions is not None:
+                if max_transactions <= 0:
+                    raise ValueError("max_transactions must be positive")
+                await cache.redis.set(f"rule_config:{rule_id}:max_transactions", str(max_transactions))
+            
+            if time_window_minutes is not None:
+                if time_window_minutes <= 0:
+                    raise ValueError("time_window_minutes must be positive")
+                await cache.redis.set(f"rule_config:{rule_id}:time_window_minutes", str(time_window_minutes))
+            
+            return {
+                "success": True,
+                "rule": {
+                    "id": rule_id,
+                    "parameters": rule_params.parameters,
+                    "updated_by": analyst_id
+                }
+            }
+            
+        elif rule_id == "rule_unusual_time":
+            # Parámetros editables: deviation_threshold
+            deviation_threshold = rule_params.parameters.get("deviation_threshold")
+            if deviation_threshold is not None:
+                if deviation_threshold <= 0 or deviation_threshold > 1:
+                    raise ValueError("deviation_threshold must be between 0 and 1")
+                await cache.redis.set(f"rule_config:{rule_id}:deviation_threshold", str(deviation_threshold))
+            
+            return {
+                "success": True,
+                "rule": {
+                    "id": rule_id,
+                    "parameters": rule_params.parameters,
+                    "updated_by": analyst_id
                 }
             }
         else:

@@ -16,6 +16,7 @@ from typing import List, Optional
 from datetime import datetime
 from pymongo import MongoClient
 import redis.asyncio as redis_async
+import redis
 import pika
 import json
 from src.application.interfaces import (
@@ -194,6 +195,8 @@ class RedisAdapter(CacheService):
             ttl: Tiempo de vida por defecto en segundos
         """
         self.redis = redis_async.from_url(connection_string, decode_responses=True)
+        # Cliente síncrono para estrategias que no pueden usar async/await
+        self.redis_sync = redis.from_url(connection_string, decode_responses=True)
         self.ttl = ttl
 
     async def get_user_location(self, user_id: str) -> Optional[dict]:

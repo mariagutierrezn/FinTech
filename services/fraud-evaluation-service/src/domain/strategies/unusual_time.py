@@ -42,16 +42,16 @@ class UnusualTimeStrategy(FraudStrategy):
         """Retorna el nombre de la estrategia."""
         return "unusual_time"
     
-    def evaluate(self, transaction: Transaction, context: Dict[str, Any]) -> RiskLevel:
+    def evaluate(self, transaction: Transaction, historical_location=None) -> Dict[str, Any]:
         """
         Evalúa si la transacción ocurre en un horario inusual para el usuario.
         
         Args:
             transaction: La transacción a evaluar
-            context: Contexto adicional de evaluación
+            historical_location: No usado en esta estrategia
             
         Returns:
-            RiskLevel: ALTO si es muy inusual, MEDIO si es moderadamente inusual, BAJO en caso contrario
+            Dict con risk_level, reasons y details
         """
         try:
             user_id = transaction.user_id
@@ -62,7 +62,11 @@ class UnusualTimeStrategy(FraudStrategy):
             
             # Si no hay suficientes transacciones históricas, no se puede establecer un patrón
             if len(historical_transactions) < self.min_transactions_for_pattern:
-                return RiskLevel.LOW
+                return {
+                    "risk_level": RiskLevel.LOW_RISK,
+                    "reasons": [],
+                    "details": "Insufficient transaction history to establish pattern"
+                }
             
             # Analizar patrón de horarios
             hourly_pattern = self._analyze_hourly_pattern(historical_transactions)
@@ -76,16 +80,32 @@ class UnusualTimeStrategy(FraudStrategy):
             # Evaluar riesgo según la desviación
             if is_unusual:
                 if deviation_hours >= self.unusual_threshold_hours * 2:
-                    return RiskLevel.HIGH
+                    return {
+                        "risk_level": RiskLevel.HIGH_RISK,
+                        "reasons": ["unusual_transaction_time"],
+                        "details": f"Transaction at {current_hour}:00 is {deviation_hours} hours from normal pattern"
+                    }
                 elif deviation_hours >= self.unusual_threshold_hours:
-                    return RiskLevel.MEDIUM
+                    return {
+                        "risk_level": RiskLevel.MEDIUM_RISK,
+                        "reasons": ["moderately_unusual_time"],
+                        "details": f"Transaction at {current_hour}:00 is {deviation_hours} hours from normal pattern"
+                    }
             
-            return RiskLevel.LOW
+            return {
+                "risk_level": RiskLevel.LOW_RISK,
+                "reasons": [],
+                "details": f"Transaction at {current_hour}:00 is within normal pattern"
+            }
             
         except Exception as e:
             # En caso de error, retornar riesgo bajo para no bloquear
             print(f"Error en UnusualTimeStrategy: {e}")
-            return RiskLevel.LOW
+            return {
+                "risk_level": RiskLevel.LOW_RISK,
+                "reasons": ["unusual_time_check_failed"],
+                "details": "Could not check unusual time pattern"
+            }
     
     def get_reason(self, transaction: Transaction, risk_level: RiskLevel) -> str:
         """
@@ -124,16 +144,17 @@ class UnusualTimeStrategy(FraudStrategy):
             list: Lista de transacciones históricas
         """
         try:
-            # Obtener últimas 100 transacciones del usuario (últimos 90 días)
+            # Obtener todas las evaluaciones del usuario
+            historical_data = self.audit_repository.get_evaluations_by_user(user_id)
+            
+            # Filtrar por fecha (últimos 90 días) y limitar a 100
             cutoff_date = datetime.now() - timedelta(days=90)
+            filtered_data = [
+                eval for eval in historical_data 
+                if eval.timestamp >= cutoff_date
+            ][:100]
             
-            historical_data = self.audit_repository.find_by_user(
-                user_id=user_id,
-                limit=100,
-                start_date=cutoff_date
-            )
-            
-            return historical_data
+            return filtered_data
             
         except Exception as e:
             print(f"Error obteniendo historial: {e}")

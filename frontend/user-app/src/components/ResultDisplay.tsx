@@ -4,6 +4,7 @@ import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { RiskScoreBar } from './RiskScoreBar';
 import { formatCurrency } from '@/utils/formatters';
+import { translateViolation } from '@/utils/translations';
 import type { TransactionResponse, TransactionRequest } from '@/types/transaction';
 
 interface ResultDisplayProps {
@@ -139,7 +140,7 @@ export const ResultDisplay: React.FC<ResultDisplayProps> = ({
                   className={`text-sm flex items-start ${config.titleColor}`}
                 >
                   <span className="mr-2">•</span>
-                  <span>{violation}</span>
+                  <span>{translateViolation(violation)}</span>
                 </li>
               ))}
             </ul>
