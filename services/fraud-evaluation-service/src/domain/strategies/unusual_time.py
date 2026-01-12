@@ -185,7 +185,8 @@ class UnusualTimeStrategy(FraudStrategy):
                 
                 hourly_counts[hour] += 1
                 
-            except Exception:
+            except (AttributeError, KeyError, ValueError, TypeError):
+                # Ignorar transacciones con formato inválido
                 continue
         
         return dict(hourly_counts)
