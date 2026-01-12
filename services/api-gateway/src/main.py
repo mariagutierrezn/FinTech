@@ -2,9 +2,11 @@
 FastAPI - Aplicación principal
 Configuración de la API y dependency injection
 
-Nota del desarrollador (María Gutiérrez):
-La IA sugirió instanciar dependencias globalmente. Las moví a funciones
-para permitir inyección y facilitar testing (Dependency Injection pattern).
+HUMAN REVIEW (María Gutiérrez):
+La IA quería poner todas las conexiones (MongoDB, Redis, etc.) como variables globales.
+Eso funciona, pero hace imposible probar el código y cambiar configuraciones en runtime.
+Por eso las puse en funciones separadas que se pueden inyectar - así los tests usan mocks
+y el código real usa las conexiones reales. Es más trabajo inicial pero vale la pena.
 """
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,7 +67,7 @@ def get_strategies():
     desde configuración para permitir modificación sin redespliegue (HU-008).
     """
     # Usar configuración por defecto de settings
-    # TODO: En producción, cargar desde Redis de forma asíncrona
+    # NOTA: En producción se puede cargar desde Redis de forma asíncrona
     amount_threshold = Decimal(str(settings.amount_threshold))
     location_radius = settings.location_radius_km
 

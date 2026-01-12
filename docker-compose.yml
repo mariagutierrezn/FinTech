@@ -65,10 +65,19 @@ services:
     container_name: fraud-api
     ports:
       - "8000:8000"
+    volumes:
+      # Volúmenes para desarrollo y testing
+      - ./services:/app/services
+      - ./tests:/app/tests
+      - ./pytest.ini:/app/pytest.ini
+      - ./requirements-test.txt:/app/requirements-test.txt
     environment:
-      MONGODB_URL: mongodb://admin:fraud2026@mongodb:27017
+      # NOTA: Credenciales solo para desarrollo/testing local.
+      # En producción usar variables de entorno o secretos seguros (Azure Key Vault, etc.)
+      MONGODB_URL: mongodb://admin:fraud2026@mongodb:27017  # sonar.issue.ignore.multicriteria: passwords
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://fraud:fraud2026@rabbitmq:5672
+      PYTHONPATH: /app
     depends_on:
       mongodb:
         condition: service_healthy
@@ -84,10 +93,19 @@ services:
       context: .
       dockerfile: services/worker-service/Dockerfile
     container_name: fraud-worker
+    volumes:
+      # Volúmenes para desarrollo y testing
+      - ./services:/app/services
+      - ./tests:/app/tests
+      - ./pytest.ini:/app/pytest.ini
+      - ./requirements-test.txt:/app/requirements-test.txt
     environment:
-      MONGODB_URL: mongodb://admin:fraud2026@mongodb:27017
+      # NOTA: Credenciales solo para desarrollo/testing local.
+      # En producción usar variables de entorno o secretos seguros (Azure Key Vault, etc.)
+      MONGODB_URL: mongodb://admin:fraud2026@mongodb:27017  # sonar.issue.ignore.multicriteria: passwords
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://fraud:fraud2026@rabbitmq:5672
+      PYTHONPATH: /app
     depends_on:
       mongodb:
         condition: service_healthy

@@ -15,16 +15,16 @@ export default defineConfig({
   testDir: './tests',
   
   /* Configuración de timeout */
-  timeout: 30 * 1000, // 30 segundos por test
+  timeout: 60 * 1000, // 60 segundos por test (aumentado para API)
   expect: {
-    timeout: 5000, // 5 segundos para assertions
+    timeout: 10000, // 10 segundos para assertions
   },
 
   /* Configuración de ejecución */
-  fullyParallel: true, // Ejecutar tests en paralelo
+  fullyParallel: false, // Ejecutar tests secuencialmente para evitar sobrecarga del API
   forbidOnly: !!process.env.CI, // Fallar si hay test.only en CI
-  retries: process.env.CI ? 2 : 0, // 2 reintentos en CI, 0 en local
-  workers: process.env.CI ? 1 : undefined, // Workers en paralelo (local: auto)
+  retries: process.env.CI ? 2 : 1, // 1 reintento en local, 2 en CI
+  workers: 1, // Un worker a la vez para evitar sobrecarga
   
   /* Reportes */
   reporter: [

@@ -14,10 +14,14 @@ from typing import Dict, Any
 def sample_transaction_data() -> Dict[str, Any]:
     """Datos de ejemplo para una transacción válida."""
     return {
-        "transaction_id": "test_txn_001",
+        "id": "test_txn_001",  # Campo 'id' requerido por el código
+        "transaction_id": "test_txn_001",  # Alias para compatibilidad
         "user_id": "user_test_001",
         "amount": 100.0,
-        "location": "4.7110,-74.0721",  # Bogotá, Colombia
+        "location": {
+            "latitude": 4.7110,
+            "longitude": -74.0721
+        },  # Bogotá, Colombia
         "device_id": "device_001",
         "timestamp": datetime.now().isoformat(),
         "metadata": {}

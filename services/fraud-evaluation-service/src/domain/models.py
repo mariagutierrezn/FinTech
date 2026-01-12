@@ -89,11 +89,15 @@ class Transaction:
         Nota del desarrollador:
         La IA propuso validaciones dispersas. Las centralicé en __post_init__
         para cumplir con "validación en un solo lugar" y evitar duplicación.
+        
+        IMPORTANTE: El monto puede ser positivo o negativo dependiendo del tipo:
+        - Transferencias, pagos, recargas: negativo (salida de dinero)
+        - Depósitos: positivo (entrada de dinero)
         """
         if not self.id or not self.id.strip():
             raise ValueError("Transaction ID cannot be empty")
 
-        # Permitir montos negativos (transferencias/pagos) y positivos (depósitos)
+        # Validar que el monto no sea cero (pero puede ser positivo o negativo)
         if self.amount == 0:
             raise ValueError("Amount cannot be zero")
 

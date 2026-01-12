@@ -45,10 +45,11 @@ class ThresholdConfigRequest(BaseModel):
 class TransactionValidateRequest(BaseModel):
     """DTO para validación sincrónica de transacción (Frontend Usuario)"""
 
-    amount: float = Field(..., gt=0, description="Transaction amount")
+    amount: float = Field(..., description="Transaction amount (can be positive or negative)")
     userId: str = Field(..., description="User ID")
     location: str = Field(..., description="Location string")
     deviceId: Optional[str] = Field(None, description="Device ID (optional)")
+    transactionType: Optional[str] = Field(None, description="Transaction type")
 
 
 class RuleParametersRequest(BaseModel):
@@ -419,13 +420,21 @@ async def validate_transaction_sync(transaction: TransactionValidateRequest):
         adjusted_amount = transaction.amount
         transaction_type = getattr(transaction, 'transactionType', 'transfer')
         
-        # Transferencias, pagos y recargas son salidas de dinero (negativo)
-        # Depósitos son entradas de dinero (positivo)
+        # IMPORTANTE: El frontend ya envía el monto con el signo correcto:
+        # - Transferencias, pagos, recargas: positivo (ej: 100)
+        # - Depósitos: positivo (ej: 100)
+        # 
+        # Para la lógica de fraude:
+        # - Transferencias/pagos/recargas se consideran salidas (negativo para auditoría)
+        # - Depósitos se consideran entradas (positivo para auditoría)
+        #
+        # Normalizar el signo basado en el tipo de transacción
         if transaction_type in ['transfer', 'payment', 'recharge']:
-            # Hacer el monto negativo si no lo es
-            if adjusted_amount > 0:
-                adjusted_amount = -adjusted_amount
-        # Para 'deposit' el monto ya es positivo, no se modifica
+            # Asegurar que sea negativo (salida de dinero)
+            adjusted_amount = -abs(transaction.amount)
+        else:  # deposit
+            # Asegurar que sea positivo (entrada de dinero)
+            adjusted_amount = abs(transaction.amount)
         
         # Preparar payload
         transaction_data = {
