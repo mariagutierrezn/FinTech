@@ -50,16 +50,20 @@ Write-Host "Comando: $pytestCommand" -ForegroundColor Gray
 Write-Host ""
 
 # Ejecutar tests en un contenedor temporal
-# Nota: Las credenciales son solo para desarrollo/testing local
-# En producción usar variables de entorno o secretos seguros
+# ⚠️ Las credenciales deben configurarse mediante archivo .env
+# Leer desde variables de entorno o usar valores del .env
+$mongodbUrl = if ($env:MONGODB_URL) { $env:MONGODB_URL } else { "mongodb://admin:CHANGE_PASSWORD@fraud-mongodb:27017" }
+$redisUrl = if ($env:REDIS_URL) { $env:REDIS_URL } else { "redis://fraud-redis:6379" }
+$rabbitmqUrl = if ($env:RABBITMQ_URL) { $env:RABBITMQ_URL } else { "amqp://fraud:CHANGE_PASSWORD@fraud-rabbitmq:5672" }
+
 docker run --rm `
     --network fraud-detection-engine_fraud-network `
     -v "${PWD}:/app" `
     -w /app `
     -e PYTHONPATH=/app `
-    -e MONGODB_URL=mongodb://admin:fraud2026@fraud-mongodb:27017 `  # sonar.issue.ignore.multicriteria: passwords
-    -e REDIS_URL=redis://fraud-redis:6379 `
-    -e RABBITMQ_URL=amqp://fraud:fraud2026@fraud-rabbitmq:5672 `
+    -e MONGODB_URL=$mongodbUrl `
+    -e REDIS_URL=$redisUrl `
+    -e RABBITMQ_URL=$rabbitmqUrl `
     python:3.11-slim `
     sh -c "pip install --quiet -r requirements-test.txt && $pytestCommand"
 
