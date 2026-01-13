@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     amount_threshold: float = 1500.0
     location_radius_km: float = 100.0
 
+    # JWT Authentication
+    jwt_secret_key: str = "your-secret-key-change-in-production-123456789"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+    
+    # Email Configuration (Gmail SMTP)
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = "distribuidoraperrosgatos@gmail.com"
+    smtp_password: str = "zwnd hwfd oirw yeje"
+    from_email: str = "distribuidoraperrosgatos@gmail.com"
+    base_url: str = "http://localhost:3000"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

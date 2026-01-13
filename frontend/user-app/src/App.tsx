@@ -5,13 +5,16 @@ import { TransactionForm } from './components/TransactionForm';
 import { ResultDisplay } from './components/ResultDisplay';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { HomePage } from './pages/HomePage';
-import { UserSelector } from './components/UserSelector';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { validateTransaction, getUserTransactions } from './services/api';
 import { Bell } from 'lucide-react';
 import { useUser } from './context/UserContext';
 import type { TransactionRequest, TransactionResponse, TransactionStatus } from './types/transaction';
 
 type Page = 'home' | 'new-transaction' | 'my-transactions';
+type AuthView = 'login' | 'register' | 'verify-email';
 
 interface Notification {
   id: string;
@@ -20,10 +23,16 @@ interface Notification {
   time: string;
   type: 'success' | 'warning' | 'info';
   read: boolean;
+  meta?: {
+    amount?: number;
+    txId?: string;
+  };
 }
 
 function App() {
-  const { userId } = useUser();
+  const { userId, isAuthenticated, login, logout } = useUser();
+  const [authView, setAuthView] = useState<AuthView>('login');
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [status, setStatus] = useState<TransactionStatus>('idle');
   const [result, setResult] = useState<TransactionResponse | null>(null);
@@ -31,12 +40,28 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [lastCheckedTransactions, setLastCheckedTransactions] = useState<Set<string>>(new Set());
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    try {
+      const raw = localStorage.getItem('notifications');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [lastCheckedTransactions, setLastCheckedTransactions] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('lastCheckedTransactions');
+      const arr = raw ? JSON.parse(raw) : [];
+      return new Set(arr);
+    } catch (e) {
+      return new Set();
+    }
+  });
 
-  // Polling para verificar actualizaciones de transacciones del admin
+  // ✅ TODOS LOS HOOKS SIEMPRE AL INICIO - Polling para verificar actualizaciones de transacciones del admin
   useEffect(() => {
-    if (!userId) return;
+    // Guard: Solo ejecutar si está autenticado y tenemos userId
+    if (!userId || !isAuthenticated) return;
 
     const checkForUpdates = async () => {
       try {
@@ -45,25 +70,65 @@ function App() {
         // Verificar transacciones que fueron revisadas por el admin
         transactions.forEach((transaction: any) => {
           const txId = transaction.transactionId || transaction.id;
-          
+
           // Si la transacción fue revisada y no la hemos notificado antes
           if (transaction.reviewedBy && !lastCheckedTransactions.has(txId)) {
+            // Construir representación del monto para buscar notificaciones previas
+            const amountStr = `$${Math.abs(transaction.amount).toLocaleString()}`;
+
+            // Eliminar notificaciones previas que indiquen "requiere autenticación" para la misma cantidad
+            setNotifications(prev => {
+              const filtered = prev.filter(n => {
+                const isPendingTitle = n.title && n.title.includes('Transacción requiere autenticación');
+                if (!isPendingTitle) return true;
+                // Si la notificación tiene meta.amount, usarla para comparar
+                if (n.meta && typeof n.meta.amount === 'number') {
+                  return n.meta.amount !== Math.abs(transaction.amount);
+                }
+                // Fallback a comparar texto (por compatibilidad con notificaciones antiguas)
+                return !(n.message && n.message.includes(amountStr));
+              });
+              try { localStorage.setItem('notifications', JSON.stringify(filtered)); } catch (e) {}
+              return filtered;
+            });
+
             if (transaction.status === 'APPROVED') {
-              addNotification(
-                'Transacción aprobada por el banco',
-                `Tu transacción de $${Math.abs(transaction.amount).toLocaleString()} fue aprobada por el analista.`,
-                'success'
-              );
+              // usar id ligado a la transacción para evitar duplicados
+              setNotifications(prev => {
+                const newNotif: Notification = {
+                  id: `tx-${txId}`,
+                  title: 'Transacción aprobada por el banco',
+                  message: `Tu transacción de ${amountStr} fue aprobada por el analista.`,
+                  time: new Date().toLocaleString(),
+                  type: 'success',
+                  read: false
+                };
+                const next = [newNotif, ...prev];
+                try { localStorage.setItem('notifications', JSON.stringify(next)); } catch (e) {}
+                return next;
+              });
             } else if (transaction.status === 'REJECTED') {
-              addNotification(
-                'Transacción rechazada',
-                `Tu transacción de $${Math.abs(transaction.amount).toLocaleString()} fue rechazada por el banco.`,
-                'warning'
-              );
+              setNotifications(prev => {
+                const newNotif: Notification = {
+                  id: `tx-${txId}`,
+                  title: 'Transacción rechazada',
+                  message: `Tu transacción de ${amountStr} fue rechazada por el banco.`,
+                  time: new Date().toLocaleString(),
+                  type: 'warning',
+                  read: false
+                };
+                const next = [newNotif, ...prev];
+                try { localStorage.setItem('notifications', JSON.stringify(next)); } catch (e) {}
+                return next;
+              });
             }
-            
+
             // Marcar como ya notificada
-            setLastCheckedTransactions(prev => new Set([...prev, txId]));
+            setLastCheckedTransactions(prev => {
+              const next = new Set([...prev, txId]);
+              try { localStorage.setItem('lastCheckedTransactions', JSON.stringify(Array.from(next))); } catch (e) {}
+              return next;
+            });
             // Refrescar la página de inicio para actualizar el balance
             setHomeRefreshKey(prev => prev + 1);
           }
@@ -80,18 +145,39 @@ function App() {
     const interval = setInterval(checkForUpdates, 10000);
 
     return () => clearInterval(interval);
-  }, [userId, lastCheckedTransactions]);
+  }, [userId, lastCheckedTransactions, isAuthenticated]);
 
-  const addNotification = (title: string, message: string, type: 'success' | 'warning' | 'info') => {
+  const addNotification = (title: string, message: string, type: 'success' | 'warning' | 'info', meta?: { amount?: number; txId?: string }) => {
     const newNotification: Notification = {
       id: Date.now().toString(),
       title,
       message,
-      time: 'Justo ahora',
+      time: new Date().toLocaleString(),
       type,
-      read: false
+      read: false,
+      meta
     };
-    setNotifications(prev => [newNotification, ...prev]);
+    setNotifications(prev => {
+      const next = [newNotification, ...prev];
+      try { localStorage.setItem('notifications', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => {
+      const next = prev.filter(n => n.id !== id);
+      try { localStorage.setItem('notifications', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  };
+
+  const markAllRead = () => {
+    setNotifications(prev => {
+      const next = prev.map(n => ({ ...n, read: true }));
+      try { localStorage.setItem('notifications', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
   };
 
   const handleSubmit = async (transaction: TransactionRequest) => {
@@ -101,6 +187,7 @@ function App() {
 
     try {
       const response = await validateTransaction(transaction);
+      console.debug('validateTransaction response', response);
       setResult(response);
       setStatus('success');
       
@@ -111,10 +198,17 @@ function App() {
           `Tu ${transaction.transactionType === 'transfer' ? 'transferencia' : transaction.transactionType === 'deposit' ? 'depósito' : 'pago'} de $${Math.abs(transaction.amount).toLocaleString()} fue procesada exitosamente.`,
           'success'
         );
-      } else if (response.status === 'SUSPICIOUS' || response.status === 'REJECTED') {
+      } else if (response.status === 'SUSPICIOUS') {
         addNotification(
           'Transacción requiere autenticación',
           `Tu transacción de $${Math.abs(transaction.amount).toLocaleString()} fue marcada como sospechosa. Por favor, confirma tu identidad.`,
+          'warning',
+          { amount: Math.abs(transaction.amount) }
+        );
+      } else if (response.status === 'REJECTED') {
+        addNotification(
+          'Transacción rechazada',
+          `Tu transacción de $${Math.abs(transaction.amount).toLocaleString()} fue rechazada por el banco.`,
           'warning'
         );
       }
@@ -135,15 +229,101 @@ function App() {
     setHomeRefreshKey(prev => prev + 1);
   };
 
+  // ✅ DESPUÉS DE TODOS LOS HOOKS - Lógica condicional de autenticación
+  if (!isAuthenticated) {
+    if (authView === 'login') {
+      return (
+        <LoginPage
+          onLogin={async (userId, password) => {
+            try {
+              const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ user_id: userId, password }),
+              });
+
+              const data = await response.json();
+
+              if (!response.ok) {
+                throw new Error(data.detail || 'Error al iniciar sesión');
+              }
+
+              login(userId, data.access_token, data.email, data.full_name);
+            } catch (err: any) {
+              throw err;
+            }
+          }}
+          onSwitchToRegister={() => setAuthView('register')}
+        />
+      );
+    } else if (authView === 'register') {
+      return (
+        <RegisterPage
+          onRegisterSuccess={(email: string) => {
+            setPendingVerificationEmail(email);
+            setAuthView('verify-email');
+          }}
+          onSwitchToLogin={() => setAuthView('login')}
+        />
+      );
+    } else if (authView === 'verify-email' && pendingVerificationEmail) {
+      return (
+        <VerifyEmailPage
+          email={pendingVerificationEmail}
+          onVerifySuccess={() => {
+            setPendingVerificationEmail(null);
+            setAuthView('login');
+          }}
+          onBackToLogin={() => {
+            setPendingVerificationEmail(null);
+            setAuthView('login');
+          }}
+        />
+      );
+    }
+    
+    // Fallback si algo sale mal
+    return (
+      <LoginPage
+        onLogin={async (userId, password) => {
+          try {
+            const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ user_id: userId, password }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(data.detail || 'Error al iniciar sesión');
+            }
+
+            login(userId, data.access_token, data.email, data.full_name);
+          } catch (err: any) {
+            throw err;
+          }
+        }}
+        onSwitchToRegister={() => setAuthView('register')}
+      />
+    );
+  }
+
   // Componente reutilizable de navegación
   const NavBar = () => (
     <nav className="bg-white shadow-sm border-b sticky top-0 z-10">
       <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-user-primary to-indigo-700 bg-clip-text text-transparent">
-          FinTech Bank
-        </h1>
+        <div className="flex items-center gap-4">
+          <img src="assets/logo-full.svg" alt="FinTech Bank" className="h-24" />
+          <button className="ml-2 px-4 py-2 bg-gray-100 border border-gray-200 rounded-full text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-200">
+            {userId}
+          </button>
+        </div>
         <div className="flex gap-4 items-center">
-          <UserSelector />
           {/* Campanita de notificaciones */}
           <div className="relative">
             <button 
@@ -172,7 +352,7 @@ function App() {
                     </div>
                   ) : (
                     notifications.map((notification) => (
-                      <div key={notification.id} className="p-4 hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                      <div key={notification.id} className={`p-4 border-b border-gray-100 last:border-b-0 ${notification.read ? 'bg-gray-50' : ''}`}>
                         <div className="flex items-start gap-3">
                           <div className={`w-2 h-2 rounded-full mt-2 ${
                             notification.type === 'success' ? 'bg-green-500' :
@@ -180,9 +360,16 @@ function App() {
                             'bg-blue-500'
                           }`}></div>
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">{notification.title}</p>
-                            <p className="text-xs text-gray-600 mt-1">{notification.message}</p>
-                            <p className="text-xs text-gray-400 mt-1">{notification.time}</p>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                                <p className="text-xs text-gray-600 mt-1">{notification.message}</p>
+                                <p className="text-xs text-gray-400 mt-1">{notification.time}</p>
+                              </div>
+                              <div className="ml-4 flex-shrink-0">
+                                <button onClick={() => removeNotification(notification.id)} className="text-xs text-gray-400 hover:text-red-500">Eliminar</button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -190,12 +377,15 @@ function App() {
                   )}
                 </div>
                 <div className="p-3 border-t border-gray-200 text-center">
-                  <button 
-                    onClick={() => setShowNotifications(false)}
-                    className="text-sm text-user-primary hover:text-indigo-700 font-medium"
-                  >
-                    Cerrar
-                  </button>
+                  <div className="flex items-center justify-between">
+                    <button onClick={markAllRead} className="text-sm text-gray-600 hover:text-gray-800 font-medium">Marcar todas leídas</button>
+                    <button 
+                      onClick={() => setShowNotifications(false)}
+                      className="text-sm text-user-primary hover:text-indigo-700 font-medium"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -230,6 +420,12 @@ function App() {
               }`}
             >
               Movimientos
+            </button>
+            <button
+              onClick={() => logout()}
+              className="px-4 py-2 rounded-lg font-medium text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+            >
+              Cerrar Sesión
             </button>
           </div>
         </div>
@@ -342,7 +538,7 @@ function App() {
           transition={{ delay: 0.5 }}
           className="mt-8 text-center text-sm text-gray-500"
         >
-          Powered by FinTech Bank v1.0
+          <span>FinTech Bank v1.0</span>
         </motion.div>
         </div>
       </div>
@@ -351,3 +547,4 @@ function App() {
 }
 
 export default App;
+
