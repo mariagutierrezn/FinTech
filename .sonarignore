@@ -1,0 +1,10 @@
+# Ignorar node_modules completamente en análisis de SonarQube
+**/node_modules/**
+frontend/admin-dashboard/node_modules/**
+frontend/user-app/node_modules/**
+
+# Ignorar otros directorios de terceros
+**/dist/**
+**/build/**
+**/coverage/**
+**/.next/**
