@@ -2,23 +2,25 @@
 FastAPI - Aplicación principal
 Configuración de la API y dependency injection
 
-Nota del desarrollador (María Gutiérrez):
-La IA sugirió instanciar dependencias globalmente. Las moví a funciones
-para permitir inyección y facilitar testing (Dependency Injection pattern).
+HUMAN REVIEW (María Gutiérrez):
+La IA quería poner todas las conexiones (MongoDB, Redis, etc.) como variables globales.
+Eso funciona, pero hace imposible probar el código y cambiar configuraciones en runtime.
+Por eso las puse en funciones separadas que se pueden inyectar - así los tests usan mocks
+y el código real usa las conexiones reales. Es más trabajo inicial pero vale la pena.
 """
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from decimal import Decimal
-from src.routes import router
-from shared.adapters import (
+from api_gateway.routes import router
+from src.adapters import (
     MongoDBAdapter,
     RedisAdapter,
     RabbitMQAdapter,
 )
-from shared.config import settings
-from shared.domain.strategies.amount_threshold import AmountThresholdStrategy
-from shared.domain.strategies.location_check import LocationStrategy
-from shared.application.use_cases import (
+from src.config import settings
+from src.domain.strategies.amount_threshold import AmountThresholdStrategy
+from src.domain.strategies.location_check import LocationStrategy
+from src.application.use_cases import (
     EvaluateTransactionUseCase,
     ReviewTransactionUseCase,
 )
@@ -65,7 +67,7 @@ def get_strategies():
     desde configuración para permitir modificación sin redespliegue (HU-008).
     """
     # Usar configuración por defecto de settings
-    # TODO: En producción, cargar desde Redis de forma asíncrona
+    # NOTA: En producción se puede cargar desde Redis de forma asíncrona
     amount_threshold = Decimal(str(settings.amount_threshold))
     location_radius = settings.location_radius_km
 
@@ -91,7 +93,7 @@ def get_review_use_case(repository=Depends(get_repository)):
 
 
 # Registrar rutas con dependency injection
-from src.routes import router, api_v1_router, configure_dependencies
+from api_gateway.routes import router, api_v1_router, configure_dependencies
 
 configure_dependencies(
     repository_factory=get_repository,
