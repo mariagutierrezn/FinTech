@@ -20,11 +20,19 @@ class DummyRedis:
         pass
 
     def zremrangebyscore(self, key, min_score, max_score):
+        """
+        Simula el comportamiento de Redis:
+        Elimina los elementos cuyo score está ENTRE min_score y max_score (inclusive).
+        """
         if key not in self.store:
             return 0
-        to_remove = [k for k, v in self.store[key].items() if v < min_score or v > max_score]
-        for k in to_remove:
-            del self.store[key][k]
+        to_remove = [
+            member
+            for member, score in self.store[key].items()
+            if min_score <= score <= max_score
+        ]
+        for member in to_remove:
+            del self.store[key][member]
 
     def zcount(self, key, min_score, max_score):
         if key not in self.store:

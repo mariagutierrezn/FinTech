@@ -4,7 +4,7 @@ Endpoints para evaluación, auditoría, revisión y configuración
 
 Cumple Single Responsibility: Cada endpoint tiene una responsabilidad única
 
-Nota del desarrollador (María Gutiérrez):
+Nota (María Gutiérrez):
 La IA sugirió poner toda la lógica en las rutas. La moví a los casos de uso
 para cumplir con Separation of Concerns - las rutas solo manejan HTTP.
 """
