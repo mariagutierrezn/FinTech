@@ -42,7 +42,7 @@ class FraudStrategy(ABC):
                 - reasons: List[str] con razones de la evaluación
                 - details: str con información adicional
         
-        Nota del desarrollador:
+Nota:
         El parámetro historical_location es opcional porque solo LocationStrategy lo usa.
         La IA propuso dos métodos separados, pero lo unifiqué para cumplir con
         "Interface Segregation" manteniendo la interface mínima.

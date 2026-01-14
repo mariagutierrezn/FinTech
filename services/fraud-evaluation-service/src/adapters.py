@@ -37,7 +37,7 @@ class MongoDBAdapter(TransactionRepository):
     
     Nota del desarrollador:
     La IA sugirió usar Motor (driver asíncrono). Lo cambié a pymongo
-    simple para mantener el MVP minimalista. Se puede refactorizar
+    simple para mantener el MVP Se puede refactorizar
     a Motor después si es necesario (YAGNI principle).
     """
 
@@ -62,7 +62,7 @@ class MongoDBAdapter(TransactionRepository):
         """
         Guarda una evaluación en MongoDB
         
-        Nota del desarrollador:
+        Nota:
         La IA sugirió guardar la entidad directamente. Agregué conversión
         explícita a dict para controlar la serialización y evitar problemas
         con tipos de Python no soportados por MongoDB.

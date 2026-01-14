@@ -4,20 +4,21 @@ Motor de detección de fraude implementado con **Clean Architecture**, **TDD/BDD
 
 ## 🧪 Cumplimiento TDD/BDD
 
-[![Tests](https://img.shields.io/badge/tests-200%2B%20passed-brightgreen)](docs/TEST_PLAN.md)
-[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](htmlcov/index.html)
+[![Tests](https://img.shields.io/badge/tests-252%20passed-brightgreen)](docs/TEST_PLAN.md)
+[![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](docs/CODE_COVERAGE_REPORT.md)
 [![TDD](https://img.shields.io/badge/TDD-aplicado-blue)](docs/FLUJO_TDD_BDD.md)
 [![BDD](https://img.shields.io/badge/BDD-historias%20Gherkin-blue)](docs/USER_HISTORY.md)
 
 ### ✅ Verificación Completa (estado actual)
 
-- ✅ **244 tests unitarios backend** pasando (pytest, `tests/unit/`)
-- ✅ **Tests de frontend (user-app y admin-dashboard)** pasando (Vitest)
-- ✅ **Cobertura backend ~95%** según `coverage.xml` (umbral mínimo configurado: 70%)
-- ✅ **Historias de usuario** cubiertas con tests unitarios, integración y E2E
+- ✅ **252 tests unitarios backend** pasando (pytest, `tests/unit/`)
+- ✅ **2 tests frontend** pasando (Vitest - user-app y admin-dashboard)
+- ✅ **Cobertura backend 96%** según `coverage.xml` (umbral mínimo configurado: 70%)
+- ✅ **14 historias de usuario** cubiertas con tests unitarios, integración y E2E
 - ✅ **Tests escritos antes del código** (TDD)
 - ✅ **Ciclo Red-Green-Refactor** documentado
 - ✅ **Especificaciones ejecutables** (BDD)
+- ✅ **11 módulos con 100% de cobertura** (adaptadores, estrategias, servicios críticos)
 
 📖 **Ver documentación completa (actualizada):**
 - `docs/USER_HISTORY.md`: Historias de usuario y flujos de negocio
@@ -70,7 +71,9 @@ Para una descripción más detallada ver:
 - **HU-013**: Dashboard usuario (historial transacciones) - ✅ 4 tests
 - **HU-014**: Dashboard admin (métricas de fraude) - ✅ 3 tests
 
-**Total:** 14 historias, 162 tests, 100% cobertura ✅
+**Total:** 14 historias, 252 tests backend + 2 tests frontend, 96% cobertura ✅
+
+📊 **Ver reporte detallado de cobertura:** [`docs/CODE_COVERAGE_REPORT.md`](docs/CODE_COVERAGE_REPORT.md)
 
 ## 🚀 Inicio Rápido
 
@@ -141,59 +144,45 @@ cd frontend/admin-dashboard && npm install && npm run dev  # http://localhost:30
 
 ## 🧪 Testing
 
-El proyecto cuenta con **tests unitarios completos** para backend y frontend:
-
-### Ejecución Rápida
+**252 tests backend + 2 tests frontend** | **96% cobertura** | **TDD/BDD aplicado**
 
 ```bash
-# Script PowerShell (Windows) - Ejecuta todos los tests
-.\scripts\run-tests.ps1 -TestType all
-
-# Backend (Python/pytest)
+# Ejecutar todos los tests
 pytest tests/unit/ -v
 
-# Frontend User App (TypeScript/Vitest)
+# Frontend
 cd frontend/user-app && npm test
-
-# Frontend Admin Dashboard (TypeScript/Vitest)
 cd frontend/admin-dashboard && npm test
 ```
 
-### Documentación Completa
-
-📖 **[Ver Guía Completa de Ejecución de Tests](TEST_EXECUTION_GUIDE.md)**
-
-La guía incluye:
-- ✅ Configuración inicial (local y Docker)
-- ✅ Ejecución de tests unitarios, integración y E2E
-- ✅ Instrucciones para GitHub Actions
-- ✅ Solución de problemas comunes
-- ✅ Reportes de cobertura
-
-### Cobertura de Tests
-
-- **Backend**: 244 tests unitarios (estrategias, adaptadores, workers, routes)
-- **Frontend**: Tests de componentes, utilidades y servicios API
-- **E2E**: Tests end-to-end con Playwright
-
-### CI/CD
-
-Los tests se ejecutan automáticamente en **GitHub Actions** en cada push/PR.
-Ver configuración en [.github/workflows/tests.yml](.github/workflows/tests.yml)
+📊 **Cobertura:** 96% (659 líneas, 29 sin cubrir)  
+📖 **Detalles:** [`docs/CODE_COVERAGE_REPORT.md`](docs/CODE_COVERAGE_REPORT.md) | [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md)  
+🔄 **CI/CD:** Tests automáticos en GitHub Actions
 
 ## 📊 Reglas de Fraude
 
-1. **Umbral de Monto**: Transacciones > $1,500 USD se marcan como HIGH_RISK
-2. **Ubicación Inusual**: Transacciones > 100 km del radio habitual se marcan como sospechosas
+**5 estrategias** implementadas con patrón Strategy:
 
-## 🔧 Endpoints API
+1. **Amount Threshold** - Monto > $1,500 USD → `HIGH_RISK`
+2. **Location Check** - Distancia > 100 km → `HIGH_RISK`
+3. **Device Validation** - Dispositivo desconocido → `HIGH_RISK`
+4. **Rapid Transaction** - >3 transacciones en 5 min → `HIGH_RISK`
+5. **Unusual Time** - Horario fuera del patrón → `MEDIUM/HIGH_RISK`
 
-- `POST /transaction` - Enviar transacción para evaluación (202 Accepted)
-- `GET /audit/all` - Consultar todas las evaluaciones
-- `GET /audit/transaction/{id}` - Consultar evaluación específica
-- `PUT /transaction/review/{id}` - Revisar transacción manualmente
-- `GET /config/thresholds` - Consultar configuración actual
-- `PUT /config/thresholds` - Actualizar umbrales
+**Lógica de combinación:**
+- **0 violaciones** → `LOW_RISK` → `APPROVED`
+- **1 violación** → `MEDIUM_RISK` → `PENDING_REVIEW`
+- **2+ violaciones** → `HIGH_RISK` → `REJECTED`
+
+## 🔧 API Endpoints
+
+**Autenticación:** `/api/v1/auth/register`, `/login`, `/verify-email`, `/me`  
+**Transacciones:** `/api/v1/transactions/evaluate`, `/validate`, `/user/{id}`  
+**Auditoría:** `/api/v1/audit/all`, `/transaction/{id}`, `/user/{id}`  
+**Revisión:** `/api/v1/transactions/review/{id}` (requiere `X-Analyst-Id`)  
+**Configuración:** `/api/v1/config/thresholds` (GET/PUT)
+
+📖 **Swagger UI:** http://localhost:8000/docs
 
 ## 📝 Licencia
 
@@ -201,12 +190,9 @@ MIT License
 
 ---
 
-## 📚 Documentación Adicional
+## 📚 Documentación
 
-- [📋 Historias de Usuario](docs/HISTORIAS_USUARIO.md)
-- [🧪 Plan de Pruebas](docs/TEST_PLAN.md)
-- [🏗️ Arquitectura de Microservicios](docs/MICROSERVICES_ARCHITECTURE.md)
-- [📦 Estructura del Proyecto](docs/PROJECT_STRUCTURE.md)
-- [🌿 Flujo de Trabajo Git](docs/GIT_WORKFLOW.md) - **Guía completa de ramas y colaboración**
-- [💼 Contexto de Negocio](docs/CONTEXTO_NEGOCIO.md)
-- [🎯 Guía de Reglas de Ubicación](docs/LOCATION_RULES_GUIDE.md)
+**Principal:** [Arquitectura](docs/ARQUITECTURE.md) | [Microservicios](docs/MICROSERVICES_ARCHITECTURE.md) | [Estructura](docs/PROJECT_STRUCTURE.md) | [Resumen](docs/OVERVIEW.md)  
+**Testing:** [Plan de Pruebas](docs/TEST_PLAN.md) | [Cobertura](docs/CODE_COVERAGE_REPORT.md) | [Casos de Prueba](docs/TEST_CASES.md)  
+**Negocio:** [Historias de Usuario](docs/USER_HISTORY.md) | [Contexto](docs/CONTEXTO_NEGOCIO.md) | [TDD/BDD](docs/FLUJO_TDD_BDD.md)  
+**Guías:** [Instalación](docs/INSTALL.md) | [Docker](docs/DOCKER_COMPOSE_USAGE.md) | [Seguridad](docs/SECURITY_CONFIGURATION.md)

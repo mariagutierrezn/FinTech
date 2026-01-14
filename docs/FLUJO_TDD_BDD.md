@@ -320,9 +320,15 @@ Sprint 3:
 ├─ Tests pasando: 162/162 ✅
 └─ Cobertura: 89%
 
+Sprint 4+ (Mejoras y cobertura):
+├─ Tests escritos: 90+ adicionales
+├─ Código implementado: Sí (después de tests)
+├─ Tests pasando: 252/252 backend + 2/2 frontend ✅
+└─ Cobertura: 96%
+
 TOTAL:
-├─ Tests: 162
-├─ Cobertura: 89%
+├─ Tests: 252 backend + 2 frontend = 254
+├─ Cobertura: 96% (11 módulos con 100%)
 ├─ Bugs en producción: 0
 └─ Confianza en código: Alta ✅
 ```
@@ -333,11 +339,12 @@ TOTAL:
 ┌─────────────────────────┬────────┬──────────┬──────────┐
 │ Tipo de Test            │ Cuenta │ % Total  │ Estado   │
 ├─────────────────────────┼────────┼──────────┼──────────┤
-│ Unit Tests              │  162   │  100%    │ ✅ PASS  │
+│ Unit Tests (Backend)    │  252   │  99.2%   │ ✅ PASS  │
+│ Unit Tests (Frontend)    │   2    │   0.8%   │ ✅ PASS  │
 │ Integration Tests       │   0    │    0%    │ ⏭️ TODO   │
 │ End-to-End Tests        │   0    │    0%    │ ⏭️ TODO   │
 ├─────────────────────────┼────────┼──────────┼──────────┤
-│ TOTAL                   │  162   │  100%    │ ✅ PASS  │
+│ TOTAL                   │  254   │  100%    │ ✅ PASS  │
 └─────────────────────────┴────────┴──────────┴──────────┘
 ```
 
@@ -358,7 +365,7 @@ TOTAL:
 │  test_use_cases.py ............... 1.56s ✅   │
 │  test_worker.py .................. 3.89s ✅   │
 ├────────────────────────────────────────────────┤
-│  TOTAL: 162 passed in 21.25s                  │
+│  TOTAL: 252 passed in ~22-33s                  │
 └────────────────────────────────────────────────┘
 ```
 

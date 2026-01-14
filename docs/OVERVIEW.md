@@ -1,9 +1,5 @@
 ## 🧾 Resumen Conceptual del Proyecto
 
-Este documento resume, en lenguaje sencillo, **qué es cada cosa en el proyecto** y cómo se relaciona con el resto.  
-Está pensado como apoyo para presentaciones y onboarding rápido.
-
----
 
 ## 🎯 Objetivo del Fraud Detection Engine
 
@@ -45,12 +41,12 @@ Está pensado como apoyo para presentaciones y onboarding rápido.
 - **Qué contiene**:
   - `domain/`:
     - **Entidades**: `Transaction`, `FraudEvaluation`, `Location`, `RiskLevel`, etc.
-    - **Estrategias de fraude**:
-      - `amount_threshold.py`: regla por monto.
-      - `location_check.py`: regla por distancia geográfica.
-      - `device_validation.py`: dispositivo conocido vs nuevo.
-      - `rapid_transaction.py`: muchas transacciones en poco tiempo.
-      - `unusual_time.py`: horarios inusuales para el usuario.
+    - **Estrategias de fraude** (5 estrategias, todas con 100% cobertura):
+      - `amount_threshold.py`: regla por monto (>$1,500 → HIGH_RISK).
+      - `location_check.py`: regla por distancia geográfica (Haversine, >100km → HIGH_RISK).
+      - `device_validation.py`: dispositivo conocido vs nuevo (nuevo → HIGH_RISK).
+      - `rapid_transaction.py`: muchas transacciones en poco tiempo (>3 en 5min → HIGH_RISK).
+      - `unusual_time.py`: horarios inusuales para el usuario (análisis de patrón histórico).
   - `application/`:
     - Casos de uso:
       - `EvaluateTransactionUseCase`: evalúa una transacción aplicando todas las estrategias.
@@ -67,11 +63,12 @@ Está pensado como apoyo para presentaciones y onboarding rápido.
 - **Responsabilidad**:
   - Recibir peticiones HTTP de clientes y frontends.
   - Exponer endpoints como:
-    - `POST /transaction` — enviar transacción para evaluación.
-    - `GET /audit/all` — ver todas las evaluaciones.
-    - `GET /audit/transaction/{id}` — ver el detalle de una evaluación.
-    - `PUT /transaction/review/{id}` — revisión manual por analista.
-    - `GET /config/thresholds` / `PUT /config/thresholds` — consultar/actualizar umbrales.
+    - **Autenticación**: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/verify-email`
+    - **Transacciones**: `POST /api/v1/transactions/evaluate`, `GET /api/v1/transactions/user/{user_id}`
+    - **Auditoría**: `GET /api/v1/audit/all`, `GET /api/v1/audit/transaction/{id}`, `GET /api/v1/audit/user/{user_id}`
+    - **Revisión Manual**: `PUT /api/v1/transactions/review/{id}` (requiere header `X-Analyst-Id`)
+    - **Configuración**: `GET /api/v1/config/thresholds`, `PUT /api/v1/config/thresholds`
+    - **Health**: `GET /health`, `GET /` (redirige a /docs)
   - Hacer **dependency injection** de los adaptadores y casos de uso del núcleo.
 - **Archivo clave**:
   - `src/main.py`: crea la app FastAPI y monta las rutas.
@@ -97,8 +94,11 @@ Está pensado como apoyo para presentaciones y onboarding rápido.
 - **Tecnologías**:
   - React + Vite + TypeScript + TailwindCSS.
 - **Funciones principales**:
-  - Ver **historial de transacciones**.
-  - Ver el **estado de riesgo** de cada transacción (aprobada, sospechosa, rechazada).
+  - **Autenticación**: registro, login, verificación de email
+  - Ver **historial de transacciones** del usuario
+  - Ver el **estado de riesgo** de cada transacción (aprobada, sospechosa, rechazada)
+  - **Notificaciones en tiempo real** cuando transacciones son revisadas por analistas
+  - Realizar nuevas transacciones con validación en tiempo real
 - **Cómo se conecta**:
   - Llama a la API del Gateway (por ejemplo, endpoints de consulta de auditoría o transacciones por usuario).
 
@@ -109,10 +109,11 @@ Está pensado como apoyo para presentaciones y onboarding rápido.
   - React + Vite + TypeScript + TailwindCSS.
   - Recharts (gráficas), TanStack Table (tablas).
 - **Funciones principales**:
-  - Ver **métricas de fraude** (HIGH/MEDIUM/LOW, volumen por día, etc.).
-  - Navegar la **auditoría** de evaluaciones.
-  - Hacer **revisión manual** de transacciones de riesgo.
-  - Consultar y actualizar **configuración/umbrales** (según endpoints).
+  - Ver **métricas de fraude** (HIGH/MEDIUM/LOW, volumen por día, tasas de aprobación/rechazo)
+  - Navegar la **auditoría** de evaluaciones con filtros y búsqueda
+  - Hacer **revisión manual** de transacciones de riesgo (aprobar/rechazar con justificación)
+  - Consultar y actualizar **configuración/umbrales** dinámicamente sin redespliegue
+  - Ver detalles completos de cada transacción (estrategias aplicadas, razones, timestamps)
 
 ---
 
@@ -152,8 +153,9 @@ docker-compose up -d
    - Crea una `Transaction`.
    - Ejecuta `EvaluateTransactionUseCase` (núcleo de fraude).
 5. **Fraud Evaluation Service**:
-   - Aplica todas las estrategias de fraude.
-   - Calcula un `FraudEvaluation` (nivel de riesgo + razones).
+   - Aplica todas las 5 estrategias de fraude en paralelo.
+   - Combina resultados: 0 violaciones → LOW_RISK, 1 → MEDIUM_RISK, 2+ → HIGH_RISK.
+   - Calcula un `FraudEvaluation` (nivel de riesgo + razones + estrategias aplicadas).
 6. **Persistencia**:
    - Guarda el resultado en MongoDB (para auditoría).
    - Actualiza Redis (por ejemplo, historial de ubicación, dispositivos).
@@ -167,16 +169,25 @@ docker-compose up -d
 ## 🧪 Testing y Calidad
 
 - **Backend (pytest)**:
-  - `tests/unit/`: 244 tests unitarios (estrategias, adaptadores, modelos, rutas, etc.).
-  - Cobertura ~95% (ver `coverage.xml` y `htmlcov/`).
+  - `tests/unit/`: **252 tests unitarios** cubriendo:
+    - 5 estrategias de fraude (100% cobertura cada una)
+    - Adaptadores de infraestructura (MongoDB, Redis, RabbitMQ - 100% cobertura)
+    - Casos de uso (100% cobertura)
+    - Modelos de dominio (95% cobertura)
+    - Rutas API (25 tests)
+    - Worker service (25 tests)
+    - Servicios de autenticación (100% cobertura)
+  - **Cobertura: 96%** (659 líneas, 29 sin cubrir)
+  - **11 módulos con 100% de cobertura**
 - **Frontends (Vitest)**:
-  - `frontend/user-app`: tests de componentes y lógica de UI.
-  - `frontend/admin-dashboard`: tests de componentes, tablas, gráficas, etc.
+  - `frontend/user-app`: 1 test pasando
+  - `frontend/admin-dashboard`: 1 test pasando
 - **E2E (Playwright)**:
   - `tests-e2e/`: cubre historias de usuario completas (User App + Admin Dashboard + API).
 - **Documentos clave**:
   - `docs/TEST_PLAN.md`: qué tipos de tests existen y cómo se ejecutan.
   - `docs/TEST_CASES.md`: casos de prueba específicos.
+  - `docs/CODE_COVERAGE_REPORT.md`: análisis detallado de cobertura de código.
 
 ---
 
@@ -196,6 +207,9 @@ docker-compose up -d
 
 - `docs/INSTALL.md`  
   Pasos para instalar, levantar y probar el proyecto en local.
+
+- `docs/CODE_COVERAGE_REPORT.md`  
+  Análisis detallado de cobertura de código (96%), módulos con 100%, y recomendaciones de mejora.
 
 ---
 

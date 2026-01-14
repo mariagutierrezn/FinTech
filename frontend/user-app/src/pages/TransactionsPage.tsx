@@ -187,8 +187,8 @@ export function TransactionsPage() {
                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
                         <p className="text-xs font-medium text-orange-800 mb-2">MOTIVOS:</p>
                         <ul className="text-sm text-orange-700 space-y-1">
-                          {tx.violations.map((v) => (
-                            <li key={`${tx.transactionId || tx.id}-${v}`}>• {translateViolation(v)}</li>
+                          {tx.violations.map((v, idx) => (
+                            <li key={`${tx.id}-${v}-${idx}`}>• {translateViolation(v)}</li>
                           ))}
                         </ul>
                       </div>

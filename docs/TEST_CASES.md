@@ -1,11 +1,11 @@
 # 🧪 Test Cases - Fraud Detection Engine
 
 **Proyecto:** Fraud Detection Engine  
-**Fecha:** Enero 12, 2026  
+**Fecha:** Enero 13, 2026  
 **Total HU:** 14  
-**Total Test Cases:** 63  
-**Tests Implementados:** 162  
-**Cobertura:** 89%
+**Total Test Cases:** 63+  
+**Tests Implementados:** 252 backend + 2 frontend = 254  
+**Cobertura:** 96%
 
 ---
 
@@ -708,7 +708,7 @@ Scenario: Obtener métricas generales
 | HU-012 | HITL | Revisión manual | 2 | 8 |
 | HU-013 | Dashboard | Historial usuario | 2 | 6 |
 | HU-014 | Dashboard | Métricas admin | 1 | 3 |
-| **TOTAL** | **5 Módulos** | **14 HU** | **27** | **162** |
+| **TOTAL** | **5 Módulos** | **14 HU** | **63+** | **252** |
 
 ---
 
@@ -2381,12 +2381,13 @@ def test_get_general_metrics(api_client, mock_mongodb):
 | HU-012 | Revisión Manual | 5 | 5 | 0 | 8 |
 | HU-013 | Dashboard Usuario | 4 | 4 | 0 | 6 |
 | HU-014 | Dashboard Admin | 3 | 3 | 0 | 3 |
-| **TOTAL** | **14 HU** | **63** | **83** | **10** | **162** |
+| **TOTAL** | **14 HU** | **63+** | **242** | **10** | **252** |
 
 ---
 
 **Documento creado:** Enero 12, 2026  
-**Última actualización:** Enero 12, 2026  
-**Versión:** 2.0 - COMPLETO (14 HU cubiertas)  
-**Total de Test Cases:** 63 documentados  
-**Total de Tests:** 162 implementados
+**Última actualización:** Enero 13, 2026  
+**Versión:** 3.0 - COMPLETO (14 HU cubiertas)  
+**Total de Test Cases:** 63+ documentados  
+**Total de Tests:** 252 backend + 2 frontend = 254 implementados  
+**Cobertura:** 96% (11 módulos con 100%)

@@ -128,7 +128,7 @@ Más detalles en `docs/TECH_STACK.md` y en los `README.md` de cada frontend.
   - Playwright cubriendo flujos de usuario y dashboard.
   - Ver `tests-e2e/README.md` para comandos y estructura.
 
-Cobertura backend actual: ~95% (`coverage.xml` generado por pytest + coverage).
+Cobertura backend actual: **96%** (`coverage.xml` generado por pytest + coverage). Ver reporte detallado en [`docs/CODE_COVERAGE_REPORT.md`](CODE_COVERAGE_REPORT.md).
 
 ---
 

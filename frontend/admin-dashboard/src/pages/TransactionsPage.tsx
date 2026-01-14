@@ -31,9 +31,15 @@ export default function TransactionsPage() {
   const loadTransactions = async () => {
     setLoading(true);
     try {
-      // Convert pageSize into numeric limit or undefined for 'Todos'
+      // Convert pageSize into numeric limit or undefined for 'Todos' 
       const limit = pageSize === 'Todos' || pageSize === 'all' ? undefined : parseInt(pageSize, 10);
       const data = await getTransactionsLog(filter || undefined, limit as any);
+      // DEBUG: Verificar violaciones
+      data.forEach(tx => {
+        if (tx.violations && tx.violations.length > 2) {
+          console.log(`Transaction ${tx.id} has ${tx.violations.length} violations:`, tx.violations);
+        }
+      });
       setAllTransactions(data);
       applyFilters(data);
     } catch (error) {
@@ -303,14 +309,23 @@ export default function TransactionsPage() {
                         <span className="text-gray-500 text-xs">-</span>
                       )}
                     </td>
-                    <td className="py-4 px-6 text-sm">
-                      {tx.violations.length > 0 ? (
+                    <td className="py-4 px-6 text-sm min-w-[200px]">
+                      {tx.violations && tx.violations.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {tx.violations.slice(0, 2).map((v) => (
-                            <span key={v} className="px-2 py-1 bg-gray-700 rounded text-xs">
+                          {tx.violations.map((v, idx) => (
+                            <span 
+                              key={`${tx.id}-${v}-${idx}`} 
+                              className="px-2 py-1 bg-gray-700 rounded text-xs whitespace-nowrap"
+                              title={translateViolation(v)}
+                            >
                               {translateViolation(v)}
                             </span>
                           ))}
+                          {tx.violations.length > 0 && (
+                            <span className="px-2 py-1 bg-gray-600 rounded text-xs text-gray-300">
+                              ({tx.violations.length})
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-gray-500">-</span>

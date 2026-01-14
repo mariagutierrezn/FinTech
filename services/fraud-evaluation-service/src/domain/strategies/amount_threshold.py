@@ -9,7 +9,7 @@ Cumplimiento SOLID:
 - Liskov Substitution: Puede sustituir a FraudStrategy
 - Dependency Inversion: Depende de abstracción (FraudStrategy)
 
-Nota del desarrollador (María Gutiérrez):
+Nota (María Gutiérrez):
 La IA sugirió comparación con >= para el umbral. Lo cambié a > (estrictamente mayor)
 porque el requerimiento de negocio dice "que exceda $1,500", no "igual o mayor".
 Esto previene falsos positivos en transacciones exactamente en el límite.
@@ -37,8 +37,8 @@ class AmountThresholdStrategy(FraudStrategy):
         Raises:
             ValueError: Si el umbral no es positivo
         
-        Nota del desarrollador:
-        Uso Decimal en lugar de float para evitar errores de precisión
+        Nota:
+         Uso Decimal en lugar de float para evitar errores de precisión
         en operaciones financieras. La IA propuso float, lo refactoricé.
         """
         if threshold <= 0:

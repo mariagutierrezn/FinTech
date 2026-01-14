@@ -15,7 +15,13 @@ Este documento describe la arquitectura **tal como está implementada en el cód
 - **`services/api-gateway`**
   - Servicio FastAPI que expone la API REST pública en `http://localhost:8000`.
   - Se encarga de:
-    - Recibir requests HTTP.
+    - **Autenticación y Autorización:**
+      - Registro de usuarios (`POST /api/v1/auth/register`)
+      - Login con JWT (`POST /api/v1/auth/login`)
+      - Verificación de email (`POST /api/v1/auth/verify-email`)
+      - Obtener usuario actual (`GET /api/v1/auth/me`)
+      - Validación de tokens JWT en endpoints protegidos
+    - Recibir requests HTTP (requieren autenticación para transacciones).
     - Orquestar casos de uso de evaluación y revisión.
     - Exponer endpoints de configuración y auditoría.
 
@@ -34,41 +40,61 @@ Este documento describe la arquitectura **tal como está implementada en el cód
 ```text
 Cliente (User App / Admin Dashboard / API client)
         │
-        │ HTTP
+        │ 1) Autenticación: POST /api/v1/auth/login
+        │    → Recibe token JWT
+        │
+        │ 2) HTTP con Authorization: Bearer <token>
         ▼
 ┌──────────────────────┐
 │      API Gateway     │  (FastAPI, puerto 8000)
+│  - Autenticación     │  - /api/v1/auth/*
+│  - Validación JWT    │  - /api/v1/transactions/*
+│  - Endpoints públicos│  - /api/v1/audit/*
 └─────────┬────────────┘
           │
-          │ 1) Publica mensajes de evaluación
+          │ 3) Publica mensajes de evaluación
           ▼
    ┌───────────────┐
    │   RabbitMQ    │
    └──────┬────────┘
           │
-          │ 2) Worker consume mensajes
+          │ 4) Worker consume mensajes
           ▼
 ┌─────────────────────────────┐
 │     Worker Service          │
 │   (fraud-evaluation core)   │
 └─────────┬───────────────────┘
           │
-          │ 3) Usa estrategias de fraude
+          │ 5) Usa 5 estrategias de fraude
           ▼
 ┌─────────────────────────────┐
 │ Fraud Evaluation Service    │
 │ (domain + application)      │
+│ - AmountThresholdStrategy   │
+│ - LocationStrategy          │
+│ - DeviceValidationStrategy  │
+│ - RapidTransactionStrategy  │
+│ - UnusualTimeStrategy       │
 └─────────┬─────────┬────────┘
           │         │
           │         │
           ▼         ▼
      ┌────────┐  ┌────────┐
      │MongoDB │  │ Redis  │
+     │- Users │  │- Cache │
+     │- Evals │  │- Config│
      └────────┘  └────────┘
 ```
 
-- **MongoDB**: almacena evaluaciones, auditoría y configuración persistente.
-- **Redis**: guarda caché de ubicaciones, dispositivos conocidos, umbrales, etc.
+- **MongoDB**: almacena:
+  - Evaluaciones y auditoría inmutable (colección `evaluations`)
+  - Usuarios y datos de autenticación (colección `users`)
+  - Configuraciones y reglas personalizadas
+- **Redis**: guarda caché de:
+  - Ubicaciones históricas de usuarios
+  - Dispositivos conocidos por usuario
+  - Umbrales y configuración activa (actualizable sin redespliegue)
+  - Patrones de comportamiento (horarios habituales, transacciones rápidas)
 
 ---
 
@@ -112,13 +138,47 @@ No se usan actualmente archivos `docker-compose.dev.yml` ni `docker-compose.prod
 
 ---
 
-## 🔐 Seguridad y Configuración
+## 🔐 Seguridad y Autenticación
+
+### Sistema de Autenticación Implementado
+
+El sistema incluye autenticación completa con JWT:
+
+1. **Registro de Usuario** (`POST /api/v1/auth/register`):
+   - Crea cuenta con email, contraseña hasheada (bcrypt)
+   - Genera token de verificación de email
+   - Envía correo de verificación
+   - Usuario queda en estado `is_verified=false`
+
+2. **Verificación de Email** (`POST /api/v1/auth/verify-email`):
+   - Valida token de verificación
+   - Marca usuario como `is_verified=true`
+   - Envía correo de bienvenida
+
+3. **Login** (`POST /api/v1/auth/login`):
+   - Valida credenciales (user_id, password)
+   - Verifica que usuario esté activo (`is_active=true`)
+   - Verifica que email esté verificado (`is_verified=true`)
+   - Genera token JWT con expiración configurable
+   - Retorna: `access_token`, `token_type`, `user_id`, `email`, `full_name`
+
+4. **Autorización**:
+   - Endpoints protegidos requieren header: `Authorization: Bearer <token>`
+   - Dependency `get_current_user_from_token` valida JWT
+   - Usuarios solo pueden ver sus propias transacciones
+   - Administradores tienen acceso completo
+
+### Configuración de Seguridad
 
 - Las URLs de servicios se leen desde variables de entorno, configuradas en `docker-compose.yml` y en `src/config.py`.
-- Credenciales de ejemplo (`admin/fraud2026`, etc.) están pensadas **solo para desarrollo local**.
+- **Contraseñas**: Se almacenan hasheadas con bcrypt (nunca en texto plano)
+- **Tokens JWT**: Configurables con secret key y tiempo de expiración
+- **Credenciales de ejemplo** (`admin/fraud2026`, etc.) están pensadas **solo para desarrollo local**.
 - Para producción se recomienda:
-  - Variables de entorno seguras / secretos (por ejemplo, Key Vault).
-  - TLS terminado en un reverse proxy o gateway de API externo.
+  - Variables de entorno seguras / secretos (por ejemplo, Key Vault, Azure Key Vault)
+  - TLS terminado en un reverse proxy o gateway de API externo
+  - Rotación de secret keys JWT
+  - Rate limiting en endpoints de autenticación
 
 ---
 
